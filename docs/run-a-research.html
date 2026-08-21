@@ -1,0 +1,266 @@
+<title>Nota Recognition Stack</title>
+<style>
+  :root {
+    --paper:#eaeef4; --surface:#f9fbfd; --sunk:#e0e6ee;
+    --ink:#16202e; --ink-soft:#4d5d72; --ink-faint:#77869a;
+    --rule:#c2cdda; --rule-soft:#d7dfe9;
+    --accent:#1f4f8f; --alert:#a63328; --good:#2c6a4d; --warn:#8a6212;
+    --alert-bg:#f6e3e0; --good-bg:#dfeee6; --warn-bg:#f5ebd8; --accent-bg:#e2e9f3;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0e141c; --surface:#151d27; --sunk:#1b242f;
+      --ink:#dce4ee; --ink-soft:#94a4b7; --ink-faint:#6b7b8e;
+      --rule:#2a3542; --rule-soft:#222c38;
+      --accent:#7dabe8; --alert:#e98a80; --good:#6dc095; --warn:#d6a74e;
+      --alert-bg:#2b1b19; --good-bg:#15271f; --warn-bg:#2a2114; --accent-bg:#18222f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0e141c; --surface:#151d27; --sunk:#1b242f;
+    --ink:#dce4ee; --ink-soft:#94a4b7; --ink-faint:#6b7b8e;
+    --rule:#2a3542; --rule-soft:#222c38;
+    --accent:#7dabe8; --alert:#e98a80; --good:#6dc095; --warn:#d6a74e;
+    --alert-bg:#2b1b19; --good-bg:#15271f; --warn-bg:#2a2114; --accent-bg:#18222f;
+  }
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--serif);
+    line-height:1.64;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:52rem;margin:0 auto;padding:3.5rem 1.5rem 6rem;
+    display:flex;flex-direction:column;gap:2.9rem;}
+  .eyebrow{font-family:var(--sans);font-size:.7rem;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);}
+  header{display:flex;flex-direction:column;gap:.9rem;
+    border-bottom:2px solid var(--ink);padding-bottom:1.5rem;}
+  h1{font-family:var(--sans);font-weight:800;font-size:clamp(1.9rem,5vw,2.7rem);
+    letter-spacing:-.02em;line-height:1.08;margin:0;text-wrap:balance;}
+  .standfirst{font-size:1.09rem;color:var(--ink-soft);margin:0;max-width:44rem;}
+  .meta{font-family:var(--mono);font-size:.78rem;color:var(--ink-faint);
+    display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;}
+  h2{font-family:var(--sans);font-weight:700;font-size:1.32rem;letter-spacing:-.01em;
+    margin:0;text-wrap:balance;}
+  h3{font-family:var(--sans);font-weight:700;font-size:1.02rem;margin:0;text-wrap:balance;}
+  section{display:flex;flex-direction:column;gap:1.2rem;}
+  p{margin:0;max-width:44rem;}
+  ul,ol{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:.5rem;max-width:44rem;}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  code{font-family:var(--mono);font-size:.87em;background:var(--sunk);
+    padding:.1em .35em;border:1px solid var(--rule-soft);}
+  cite{font-style:normal;font-family:var(--sans);font-size:.76rem;font-weight:600;
+    color:var(--accent);white-space:nowrap;}
+
+  .verdict{border:1px solid var(--rule);border-left:4px solid var(--accent);
+    background:var(--surface);padding:1.4rem 1.5rem;display:flex;flex-direction:column;gap:.8rem;}
+  .verdict .lead{font-size:1.06rem;}
+
+  .claim{border:1px solid var(--rule);background:var(--surface);
+    padding:1.3rem 1.4rem;display:flex;flex-direction:column;gap:.8rem;}
+  .claim.pivot{border-left:4px solid var(--good);}
+  .claim.caution{border-left:4px solid var(--warn);}
+  .evidence{font-size:.93rem;color:var(--ink-soft);border-top:1px dashed var(--rule);padding-top:.75rem;}
+  .evidence b{font-family:var(--sans);font-size:.66rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:.25rem;}
+
+  .scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface);}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:34rem;}
+  caption{text-align:left;font-family:var(--sans);font-size:.68rem;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);padding:.85rem 1rem .55rem;}
+  th,td{padding:.55rem 1rem;text-align:left;border-top:1px solid var(--rule-soft);vertical-align:top;}
+  thead th{font-family:var(--sans);font-size:.7rem;font-weight:700;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--ink-faint);border-top:none;border-bottom:1px solid var(--rule);}
+  td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  tbody tr:hover{background:var(--sunk);}
+  .pick{color:var(--good);font-weight:600;}
+  .drop{color:var(--ink-faint);}
+
+  pre{margin:0;background:var(--sunk);border:1px solid var(--rule);padding:1rem 1.1rem;
+    overflow-x:auto;font-family:var(--mono);font-size:.81rem;line-height:1.55;color:var(--ink);}
+
+  .risk{border:1px solid var(--rule);border-left:4px solid var(--alert);
+    background:var(--alert-bg);padding:1.15rem 1.3rem;display:flex;flex-direction:column;gap:.45rem;}
+
+  .refs{font-size:.86rem;color:var(--ink-soft);display:flex;flex-direction:column;gap:.7rem;}
+  .refs div{padding-left:2.2rem;text-indent:-2.2rem;max-width:46rem;}
+  footer{border-top:1px solid var(--rule);padding-top:1.4rem;font-size:.85rem;
+    color:var(--ink-faint);display:flex;flex-direction:column;gap:.5rem;}
+  a{color:var(--accent);}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Deep Research &middot; Run A &middot; Handwritten Document AI</div>
+    <h1>Nota Recognition Stack</h1>
+    <p class="standfirst">What the literature says about recognising handwritten Indonesian purchase notes from 440 receipts and three writers, on a CPU — and the one finding that reorders the whole plan.</p>
+    <div class="meta">
+      <span>SNAPTOCK AI</span><span>16 Aug 2026</span><span>12 verified sources</span><span>Run B (forecasting) pending</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>The recommendation</h2>
+    <div class="verdict">
+      <p class="lead">Fine-tune a <b>CTC-based PP-OCR recognizer</b>, not a transformer seq2seq model and not a document VLM. Attack <b>textual</b> domain gap before <b>visual</b> domain gap: mine Indonesian product vocabulary and price distributions from <b>CORD</b>, render it as synthetic handwriting with a diffusion HTG model, and composite into the real nota template. Assign fields by <b>column geometry</b>, not a learned model. Use the <b>arithmetic identity as the correction oracle</b> that a CTC decoder's missing language model would otherwise provide.</p>
+      <p>Every clause above is a decision the evidence forced, and each is defended below with the trade-off it accepts.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The finding that reorders the plan</h2>
+
+    <div class="claim pivot">
+      <h3>Textual divergence hurts generalization more than visual divergence</h3>
+      <p>The largest controlled study of HTR generalization to date analysed <span class="num">336</span> out-of-distribution cases across eight state-of-the-art HTR models, seven datasets and five languages. Its headline conclusion: <em>&ldquo;the most significant factor for generalization lies in the textual divergence between domains, followed by visual divergence.&rdquo;</em> <cite>[1]</cite></p>
+      <p>I previously told you handwriting-style diversity was the critical path. On this evidence that ordering is wrong. Your corpus has a <span class="num">739</span>-word closed vocabulary — when a supplier writes a product you have never seen, that is textual divergence, and it is the failure mode that will dominate. Style diversity still matters; it matters second.</p>
+      <div class="evidence"><b>Why it changes the build</b>The synthetic data pipeline should be driven first by <em>vocabulary breadth</em> — tens of thousands of real Indonesian product names and plausible prices — and only second by handwriting-style variety. Those are different generators with different priorities, and you would have built them in the wrong order.</div>
+    </div>
+
+    <div class="claim pivot">
+      <h3>CORD gives you exactly that vocabulary, in Indonesian</h3>
+      <p>CORD (Consolidated Receipt Dataset) is <span class="num">11,000</span> <b>Indonesian</b> receipts from shops and restaurants, annotated with 30 fine-grained semantic entities including menu name, quantity, unit price and tax; the public release is <span class="num">800/100/100</span> train/val/test. <cite>[2]</cite> SROIE adds <span class="num">1,000</span> scanned receipts with company, date, address and total. <cite>[3]</cite></p>
+      <p>CORD's receipts are printed, so it is nearly useless as handwriting training data. That is not what you need it for. You need its <em>text</em>: real Indonesian product names, real price magnitudes, real quantity conventions — precisely the axis finding [1] identifies as dominant. Treat CORD as a language resource, not an image resource.</p>
+      <div class="evidence"><b>Trade-off accepted</b>CORD is restaurant and shop receipts, not distributor notes. Its vocabulary skews toward prepared food and retail goods. Expect partial coverage of a hardware or wholesale supplier's catalogue.</div>
+    </div>
+
+    <div class="claim">
+      <h3>Synthetic handwriting works, and the published gains are large at your data scale</h3>
+      <p>A 2025 ICCV workshop analysis of handwritten text generation as HTR augmentation reports CER reductions of <span class="num">13.3%</span> to <span class="num">35.7%</span>, and a setting where a transformer recognizer trained on <span class="num">5,000</span> real handwriting images improved from <span class="num">25.50%</span> CER to <span class="num">3.13%</span> once <span class="num">25,000</span> synthetic images were added. <cite>[4]</cite></p>
+      <p>Your usable real signal — roughly <span class="num">6,300</span> handwritten tokens — sits in the same order of magnitude as that <span class="num">5,000</span>-image baseline, which is the strongest reason to believe synthetic generation is worth building properly rather than bolting on.</p>
+      <p>For the generator itself, latent-diffusion HTG is the current line of work: DiffusionPen conditions style from as few as five exemplars using a hybrid metric-learning and classification style extractor <cite>[5]</cite>; WordStylist established styled verbatim generation with latent diffusion <cite>[6]</cite>; more recent entries include semi-supervised diffusion adaptation <cite>[7]</cite> and ViT-based generation <cite>[8]</cite>.</p>
+      <div class="evidence"><b>Caution</b>These CER figures come from the source paper's own experimental settings on standard benchmarks, not from Indonesian handwritten forms. Treat the direction as well-supported and the magnitude as an upper bound to verify on your own data, not a number to quote in a proposal.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Architecture: why CTC beats the alternatives here</h2>
+    <p>Three families were considered. The constraint that decides it is not accuracy in the abstract — it is accuracy achievable from ~6,300 real tokens, running on a judge's CPU.</p>
+    <div class="scroll">
+      <table>
+        <caption>Recognition architecture comparison</caption>
+        <thead><tr><th>Family</th><th>Trains on small data</th><th>CPU inference</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>CTC</b> — PP-OCR, CRNN, SVTR</td>
+            <td>Yes — documented advantage on comparatively smaller datasets <cite>[9]</cite></td>
+            <td>Yes — INT8 dynamic quantization reported with no accuracy loss and 20&ndash;50% speedup on x86-64 with VNNI <cite>[10]</cite></td>
+            <td class="pick">Recommended</td>
+          </tr>
+          <tr>
+            <td><b>Seq2seq</b> — TrOCR <cite>[11]</cite></td>
+            <td>Weaker — transformer recognizers are reported to require massive training datasets <cite>[9]</cite></td>
+            <td>Marginal at your latency budget</td>
+            <td class="drop">Reject for core; keep as an ablation</td>
+          </tr>
+          <tr>
+            <td><b>Document VLM</b></td>
+            <td>Zero-shot only; fine-tuning needs image&rarr;JSON pairs you do not have</td>
+            <td>No</td>
+            <td class="drop">Reject for core; permitted as assistive labeller</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The strongest single data point against the VLM route is that it now loses on its own ground. PP-OCRv6 reports a <span class="num">34.5M</span>-parameter model outperforming Qwen3-VL-235B, GPT-5.5 and Gemini-3.1-Pro on OCR tasks, with a tiny tier running <span class="num">3.9&times;</span> faster than PP-OCRv5-mobile on Intel Xeon CPU, and explicitly motivates the work by VLMs' &ldquo;hallucination, imprecise localization, and prohibitive computational cost&rdquo; in dedicated OCR settings. <cite>[12]</cite></p>
+    <div class="claim caution">
+      <h3>Two honest caveats on that headline</h3>
+      <p>Those comparisons are run on the authors' <em>in-house</em> benchmarks — a vendor evaluating its own model against competitors, not an independent benchmark. Discount accordingly.</p>
+      <p>And PP-OCRv6's abstract does not mention handwriting at all, whereas PP-OCRv5 documents specific handwriting recognition improvements over v4. <cite>[13]</cite> For a handwritten-input product, <b>start from v5, benchmark v6, and let your own numbers decide</b> — do not assume the newer version is better on your domain.</p>
+    </div>
+    <p><b>The trade-off you are accepting:</b> CTC decodes largely position-by-position and lacks the language-model context that makes seq2seq models strong on ambiguous handwriting. That is a real cost. The next section is how you pay it back.</p>
+  </section>
+
+  <section>
+    <h2>The reconciliation layer, honestly assessed</h2>
+    <p>You asked whether the arithmetic self-correction idea is novel. One search pass cannot prove a negative, but the picture is clear enough to keep you out of trouble.</p>
+    <ul>
+      <li><b>Arithmetic validation of invoices is standard commercial practice.</b> Recalculating quantity &times; unit price against line totals, and line totals against the invoice sum, is routine in accounts-payable OCR products. As a product feature it is not novel.</li>
+      <li><b>Confidence-driven candidate search is established post-OCR literature.</b> The ACM Computing Surveys review of post-OCR processing documents systems combining a character language model, an error model and a hypothesis model built from character recognition confidences, compiled into weighted finite-state transducers and decoded by lowest-cost path, plus confusion-matrix candidate generation. <cite>[14]</cite> The mechanism you proposed already has a literature.</li>
+      <li><b>What is genuinely under-served</b> is using the arithmetic identity itself as the <em>correction oracle</em> — substituting a document-internal mathematical constraint for the language model in that established pipeline — and doing it on handwritten Indonesian nota. A 2026 applied paper explicitly frames arithmetic validation of line-item totals as a gap that the extraction-focused literature ignores, though it appears in a low-tier venue and should carry little evidential weight. <cite>[15]</cite></li>
+    </ul>
+    <div class="verdict">
+      <p><b>How to claim it:</b> as an engineering contribution and an empirical result on a new domain — &ldquo;we substitute a document-internal arithmetic constraint for the language model in the standard confidence-driven post-OCR correction framework, and measure the repair rate on handwritten Indonesian nota&rdquo; — not as a novel method. That version is true, defensible under questioning, and still differentiating. Your audit already gives you the number that makes it credible: the constraint holds on <span class="num">98.1%</span> of line items.</p>
+    </div>
+    <p>One design warning the literature implies. The identity <span class="num">q &times; p = j</span> is under-determined: many digit substitutions satisfy it, and a repair that restores arithmetic while inventing a wrong price is worse than no repair. Bound the candidate search by per-character confidence, cap edit distance, and <b>measure false-repair rate as a first-class metric</b>, not just repair rate.</p>
+  </section>
+
+  <section>
+    <h2>Benchmark protocol</h2>
+    <p>Designed so each recommendation above can be falsified on your own data. All splits group by source receipt, never <code>image_id</code>; the primary split holds out writers, because per finding [1] textual and visual divergence — not receipt identity — are what break in deployment.</p>
+    <div class="scroll">
+      <table>
+        <caption>Ablation ladder</caption>
+        <thead><tr><th class="n">#</th><th>Condition</th><th>Question it answers</th></tr></thead>
+        <tbody>
+          <tr><td class="n">0</td><td>PP-OCRv5 / v6 zero-shot, no fine-tuning</td><td>What does off-the-shelf already give you? Also your rulebook-compliance floor.</td></tr>
+          <tr><td class="n">1</td><td>Fine-tune on real crops only, clean split</td><td>The honest baseline the leaking split never produced.</td></tr>
+          <tr><td class="n">2</td><td>+ synthetic, CORD vocabulary, existing styles</td><td>Does closing <em>textual</em> divergence help most? Tests finding [1].</td></tr>
+          <tr><td class="n">3</td><td>+ synthetic, existing vocabulary, many styles</td><td>Does closing <em>visual</em> divergence help most? The counterfactual to [1].</td></tr>
+          <tr><td class="n">4</td><td>+ both</td><td>Do they compose or saturate?</td></tr>
+          <tr><td class="n">5</td><td>+ arithmetic reconciliation at inference</td><td>Repair rate, false-repair rate, net field accuracy.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Conditions 2 and 3 are the experiment worth running most. They isolate the claim the whole strategy rests on, and if 3 beats 2 on your data, the plan above is wrong and you should know that before writing the proposal.</p>
+    <pre>METRICS
+  CER, stratified: digits vs letters      # digits corrupt inventory; letters are cosmetic
+  Field accuracy: qty / harga / jumlah    # per-column, via template geometry
+  Whole-nota exact match                  # the metric a shop owner actually feels
+  Repair rate AND false-repair rate       # reconciliation must not invent values
+  Calibration: confidence vs correctness  # the repair search depends on it
+
+SPLITS
+  primary    group by writer      (deployment failure mode)
+  secondary  group by source nota (clean in-domain estimate)
+  external   OCR-Struk-Belanja    (never trained on; domain shift)
+
+SYNTHETIC VOLUME CURVE
+  0 / 5k / 25k / 100k generated crops -> find where CER stops improving</pre>
+  </section>
+
+  <section>
+    <h2>Risks, and where this is least certain</h2>
+    <div class="risk">
+      <p><b>Three writers may be too few to seed style generation.</b> DiffusionPen-style few-shot conditioning needs style exemplars to imitate. You have ~3 writers, which may produce three well-imitated styles rather than genuine diversity. Mitigation: seed styles from a public handwriting corpus such as IAM and transfer, rather than relying only on your own writers — but this is the weakest link in the recommended plan.</p>
+    </div>
+    <div class="risk">
+      <p><b>The CER gains in [4] are not from your domain.</b> They come from standard HTR benchmarks in other languages and scripts. Indonesian handwritten forms with a fixed tabular template may behave differently in either direction.</p>
+    </div>
+    <div class="risk">
+      <p><b>Novelty cannot be established by one search pass.</b> The reconciliation assessment says what I found, not what exists. Before any originality claim reaches the proposal, search specifically for prior art on constraint-driven OCR correction in tabular financial documents.</p>
+    </div>
+    <div class="risk">
+      <p><b>The deployment gap is unmeasured and unaddressed.</b> Every training photograph is flat, sharp and evenly lit. Nothing in this plan yet tests angled, shadowed or creased input, and no augmentation in the corpus simulates it. Document rectification and realistic photometric augmentation were scoped into this run but are the thinnest-researched part of it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>References</h2>
+    <div class="refs">
+      <div>[1] Garrido-Mu&ntilde;oz, C., &amp; Calvo-Zaragoza, J. (2025). <i>On the Generalization of Handwritten Text Recognition Models.</i> CVPR 2025. <a href="https://arxiv.org/abs/2411.17332">arXiv:2411.17332</a></div>
+      <div>[2] Park, S., Shin, S., et al. <i>CORD: A Consolidated Receipt Dataset for Post-OCR Parsing.</i> Clova AI. <a href="https://github.com/clovaai/cord">github.com/clovaai/cord</a></div>
+      <div>[3] ICDAR 2019 Competition on Scanned Receipt OCR and Information Extraction (SROIE).</div>
+      <div>[4] Pippi, V., et al. (2025). <i>Quo Vadis Handwritten Text Generation for Handwritten Text Recognition?</i> ICCV 2025 Workshop on Vision and Documents. <a href="https://openaccess.thecvf.com/content/ICCV2025W/VisionDocs/papers/Pippi_Quo_Vadis_Handwritten_Text_Generation_for_Handwritten_Text_Recognition_ICCVW_2025_paper.pdf">openaccess.thecvf.com</a></div>
+      <div>[5] Nikolaidou, K., et al. (2024). <i>DiffusionPen: Towards Controlling the Style of Handwritten Text Generation.</i> ECCV 2024. <a href="https://link.springer.com/chapter/10.1007/978-3-031-73013-9_24">doi:10.1007/978-3-031-73013-9_24</a></div>
+      <div>[6] <i>WordStylist: Styled Verbatim Handwritten Text Generation with Latent Diffusion Models.</i> <a href="https://arxiv.org/abs/2303.16576">arXiv:2303.16576</a></div>
+      <div>[7] <i>Semi-Supervised Adaptation of Diffusion Models for Handwritten Text Generation.</i> <a href="https://arxiv.org/abs/2412.15853">arXiv:2412.15853</a></div>
+      <div>[8] <i>WriteViT: Handwritten Text Generation with Vision Transformer.</i> <a href="https://arxiv.org/abs/2505.13235">arXiv:2505.13235</a></div>
+      <div>[9] Assessing advanced handwritten text recognition engines for digitizing historical documents. <i>International Journal of Digital Humanities</i> (2025). <a href="https://link.springer.com/article/10.1007/s42803-025-00100-0">doi:10.1007/s42803-025-00100-0</a></div>
+      <div>[10] <i>PaddleOCR 3.0 Technical Report.</i> <a href="https://arxiv.org/abs/2507.05595">arXiv:2507.05595</a></div>
+      <div>[11] Li, M., et al. <i>TrOCR: Transformer-Based Optical Character Recognition with Pre-trained Models.</i> AAAI. <a href="https://ojs.aaai.org/index.php/AAAI/article/view/26538">ojs.aaai.org</a></div>
+      <div>[12] Zhang, Y., Wang, X., Lin, M., et al. (2026). <i>PP-OCRv6: From 1.5M to 34.5M Parameters, Surpassing Billion-Scale VLMs on OCR Tasks.</i> <a href="https://arxiv.org/abs/2606.13108">arXiv:2606.13108</a></div>
+      <div>[13] <i>Introduction to PP-OCRv5.</i> PaddleOCR documentation. <a href="https://paddlepaddle.github.io/PaddleOCR/main/en/version3.x/algorithm/PP-OCRv5/PP-OCRv5.html">paddlepaddle.github.io</a></div>
+      <div>[14] <i>Survey of Post-OCR Processing Approaches.</i> ACM Computing Surveys. <a href="https://dl.acm.org/doi/fullHtml/10.1145/3453476">doi:10.1145/3453476</a></div>
+      <div>[15] Dhumal et al. (2026). Integrating OCR, Canonical Modeling, and Human-in-the-Loop. <i>IJCA</i> 187(90). <span class="num">Low-tier venue &mdash; cited for framing only.</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>Limitations.</b> This is one systematic search pass, not an exhaustive review. Sources were verified to exist and their claims read from abstracts or full text; benchmark numbers are reported as their authors state them and have not been independently reproduced. Document preprocessing and CPU quantization were scoped into this run but received the least depth. Forecasting and inventory policy (Run B) are untouched.</div>
+    <div><b>AI disclosure.</b> Literature search, source verification and synthesis were performed with AI assistance. All cited sources were retrieved and checked; no reference here is included on the basis of recall alone.</div>
+  </footer>
+
+</div>

@@ -1,0 +1,242 @@
+<title>Nota Pembelian Audit</title>
+<style>
+  :root {
+    --paper:#eaeef4; --surface:#f9fbfd; --sunk:#e0e6ee;
+    --ink:#16202e; --ink-soft:#4d5d72; --ink-faint:#77869a;
+    --rule:#c2cdda; --rule-soft:#d7dfe9;
+    --accent:#1f4f8f; --alert:#a63328; --good:#2c6a4d; --warn:#8a6212;
+    --alert-bg:#f6e3e0; --good-bg:#dfeee6; --warn-bg:#f5ebd8;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0e141c; --surface:#151d27; --sunk:#1b242f;
+      --ink:#dce4ee; --ink-soft:#94a4b7; --ink-faint:#6b7b8e;
+      --rule:#2a3542; --rule-soft:#222c38;
+      --accent:#7dabe8; --alert:#e98a80; --good:#6dc095; --warn:#d6a74e;
+      --alert-bg:#2b1b19; --good-bg:#15271f; --warn-bg:#2a2114;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0e141c; --surface:#151d27; --sunk:#1b242f;
+    --ink:#dce4ee; --ink-soft:#94a4b7; --ink-faint:#6b7b8e;
+    --rule:#2a3542; --rule-soft:#222c38;
+    --accent:#7dabe8; --alert:#e98a80; --good:#6dc095; --warn:#d6a74e;
+    --alert-bg:#2b1b19; --good-bg:#15271f; --warn-bg:#2a2114;
+  }
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--serif);
+    line-height:1.62;margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:52rem;margin:0 auto;padding:3.5rem 1.5rem 6rem;
+    display:flex;flex-direction:column;gap:2.75rem;}
+
+  .eyebrow{font-family:var(--sans);font-size:.7rem;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);}
+
+  header{display:flex;flex-direction:column;gap:.9rem;
+    border-bottom:2px solid var(--ink);padding-bottom:1.5rem;}
+  h1{font-family:var(--sans);font-weight:800;font-size:clamp(1.9rem,5vw,2.7rem);
+    letter-spacing:-.02em;line-height:1.08;margin:0;text-wrap:balance;}
+  .standfirst{font-size:1.09rem;color:var(--ink-soft);margin:0;max-width:44rem;}
+  .meta{font-family:var(--mono);font-size:.78rem;color:var(--ink-faint);
+    display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;}
+
+  h2{font-family:var(--sans);font-weight:700;font-size:1.32rem;letter-spacing:-.01em;
+    margin:0 0 .2rem;text-wrap:balance;}
+  h3{font-family:var(--sans);font-weight:700;font-size:1.02rem;margin:0;text-wrap:balance;}
+  section{display:flex;flex-direction:column;gap:1.15rem;}
+  p{margin:0;max-width:44rem;}
+  ul{margin:0;padding-left:1.15rem;display:flex;flex-direction:column;gap:.45rem;max-width:44rem;}
+
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  code{font-family:var(--mono);font-size:.87em;background:var(--sunk);
+    padding:.1em .35em;border:1px solid var(--rule-soft);}
+
+  /* headline figures — echoes the nota's ruled columns */
+  .figures{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));
+    border:1px solid var(--rule);background:var(--surface);}
+  .fig{padding:1.1rem 1.15rem;border-right:1px solid var(--rule-soft);
+    display:flex;flex-direction:column;gap:.3rem;}
+  .fig:last-child{border-right:none;}
+  .fig .v{font-family:var(--mono);font-variant-numeric:tabular-nums;
+    font-size:1.65rem;font-weight:600;line-height:1;letter-spacing:-.02em;}
+  .fig .k{font-family:var(--sans);font-size:.68rem;font-weight:700;
+    letter-spacing:.11em;text-transform:uppercase;color:var(--ink-faint);}
+  .fig.is-alert .v{color:var(--alert);}
+  .fig.is-good .v{color:var(--good);}
+
+  .finding{border:1px solid var(--rule);background:var(--surface);
+    display:flex;flex-direction:column;gap:.85rem;padding:1.35rem 1.4rem;}
+  .finding.blocker{border-left:4px solid var(--alert);}
+  .finding.major{border-left:4px solid var(--warn);}
+  .finding.note{border-left:4px solid var(--accent);}
+  .fhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:.7rem;}
+  .chip{font-family:var(--sans);font-size:.63rem;font-weight:800;letter-spacing:.13em;
+    text-transform:uppercase;padding:.24em .6em;border:1px solid currentColor;white-space:nowrap;}
+  .chip.blocker{color:var(--alert);background:var(--alert-bg);}
+  .chip.major{color:var(--warn);background:var(--warn-bg);}
+  .chip.note{color:var(--accent);background:var(--sunk);}
+  .action{font-size:.95rem;color:var(--ink-soft);border-top:1px dashed var(--rule);
+    padding-top:.8rem;}
+  .action b{font-family:var(--sans);font-size:.68rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:.25rem;}
+
+  .scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface);}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:32rem;}
+  caption{text-align:left;font-family:var(--sans);font-size:.68rem;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+    padding:.85rem 1rem .55rem;}
+  th,td{padding:.5rem 1rem;text-align:left;border-top:1px solid var(--rule-soft);}
+  thead th{font-family:var(--sans);font-size:.7rem;font-weight:700;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--ink-faint);border-top:none;
+    border-bottom:1px solid var(--rule);}
+  tbody td.n,tbody th.n,thead th.n{text-align:right;font-family:var(--mono);
+    font-variant-numeric:tabular-nums;}
+  tbody tr:hover{background:var(--sunk);}
+  td.bad{color:var(--alert);font-weight:600;}
+  td.ok{color:var(--good);font-weight:600;}
+
+  pre{margin:0;background:var(--sunk);border:1px solid var(--rule);
+    padding:1rem 1.1rem;overflow-x:auto;font-family:var(--mono);
+    font-size:.81rem;line-height:1.55;color:var(--ink);}
+
+  .callout{border:1px solid var(--rule);border-left:4px solid var(--good);
+    background:var(--good-bg);padding:1.15rem 1.3rem;
+    display:flex;flex-direction:column;gap:.5rem;}
+
+  footer{border-top:1px solid var(--rule);padding-top:1.4rem;
+    font-size:.85rem;color:var(--ink-faint);display:flex;flex-direction:column;gap:.5rem;}
+  a{color:var(--accent);}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Dataset Audit &middot; SNAPTOCK AI</div>
+    <h1>Nota Pembelian Audit</h1>
+    <p class="standfirst">A forensic read of the Roboflow corpus behind the receipt-scanning model — what it actually contains, one defect that invalidates every accuracy number reported so far, and one property that turns out to be worth building the architecture around.</p>
+    <div class="meta">
+      <span>ocr-fqwqd/nota-pembelian v9</span>
+      <span>&ldquo;dataset_nota_v8&rdquo;</span>
+      <span>COCO export &middot; CC BY 4.0</span>
+      <span>Audited 16 Aug 2026</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="figures">
+      <div class="fig"><span class="v">440</span><span class="k">Real nota</span></div>
+      <div class="fig is-alert"><span class="v">96.1%</span><span class="k">Val set contaminated</span></div>
+      <div class="fig is-good"><span class="v">98.1%</span><span class="k">Arithmetic holds</span></div>
+      <div class="fig"><span class="v">1,011</span><span class="k">Line items total</span></div>
+    </div>
+    <p>The corpus is photographs of handwritten Indonesian purchase notes on the standard pre-printed nota booklet — the ubiquitous <span class="num">BANYAKNYA / NAMA BARANG / HARGA / JUMLAH</span> carbon-copy form. Ballpoint on tinted paper, shot flat and well lit. No thermal receipts appear in the sample examined.</p>
+  </section>
+
+  <section>
+    <h2>Findings</h2>
+
+    <div class="finding blocker">
+      <div class="fhead"><span class="chip blocker">Blocker</span><h3>The train/val/test split leaks almost completely</h3></div>
+      <p>Version 9 contains <span class="num">1,295</span> images but only <span class="num">440</span> distinct receipts: Roboflow generated three brightness-darkened copies of each source (<span class="num">415</span> notes &times; 3, <span class="num">25</span> &times; 2). The current preparation code splits on COCO <code>image_id</code>, and the three copies of one receipt carry three different <code>image_id</code>s — so they scatter across all three partitions.</p>
+      <p>Re-running that split reproduces the reported <span class="num">1036 / 129 / 130</span> partition exactly, which confirms the replication. Of the <span class="num">118</span> distinct receipts landing in validation, <span class="num">115</span> also appear in training. The model is being evaluated on receipts it memorised, differing only in brightness.</p>
+      <div class="scroll">
+        <table>
+          <caption>Contamination by partition</caption>
+          <thead><tr><th>Partition</th><th class="n">Crops</th><th class="n">Distinct nota</th><th class="n">Also in train</th><th class="n">Contaminated crops</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Validation</th><td class="n">1,793</td><td class="n">118</td><td class="n">115</td><td class="n bad">96.1%</td></tr>
+            <tr><th scope="row">Test</th><td class="n">1,822</td><td class="n">116</td><td class="n">113</td><td class="n bad">97.1%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The genuinely unseen evaluation set is <b>three receipts</b> in validation and <b>three</b> in test. Every accuracy figure produced from this split is meaningless, and would not survive a judge asking how the data was partitioned.</p>
+      <div class="action"><b>Fix</b>Group by source filename — parse <code>nota203</code> out of <code>nota203_jpg.rf.&lt;hash&gt;.jpg</code> and split on that identifier, never on <code>image_id</code>. Better still, hold out by writer: handwriting style, not receipt identity, is the real generalisation boundary.</div>
+    </div>
+
+    <div class="finding major">
+      <div class="fhead"><span class="chip major">Major</span><h3>The corpus is far smaller than the annotation count suggests</h3></div>
+      <p>The headline <span class="num">18,585</span> annotations reduce to roughly <span class="num">6,300</span> distinct handwritten tokens once augmentation is removed — a median of <span class="num">14</span> per receipt, ranging from <span class="num">5</span> to <span class="num">38</span>. Reconstructing complete rows yields <span class="num">1,011</span> usable line items across <span class="num">439</span> receipts, about <span class="num">2.3</span> per note. Most rows on most forms are blank.</p>
+      <p>Augmentation is brightness reduction only, up to 20%, with auto-orient as the sole preprocessing. There is no rotation, no perspective warp, no blur, no occlusion — none of the degradation a phone photograph in a warung actually introduces. Every image is <span class="num">1536&times;2048</span>; median annotation box is <span class="num">176&times;76</span> px.</p>
+      <div class="action"><b>Consequence</b>Data volume, not model architecture, is the binding constraint. Plan the synthetic pipeline as the primary workstream rather than a supporting one.</div>
+    </div>
+
+    <div class="finding major">
+      <div class="fhead"><span class="chip major">Major</span><h3>Labels are word-level over a closed vocabulary with a long tail</h3></div>
+      <p>The <span class="num">739</span> COCO categories are not object classes — each is the literal text inside one box. They divide into <span class="num">328</span> numeric strings (quantities and prices: <code>1</code>, <code>8</code>, <code>1500</code>, <code>17000</code>) and <span class="num">411</span> Indonesian words (<code>indomie</code>, <code>teh</code>, <code>gula</code>, <code>kentang</code>). A product name spans several boxes: <span class="num">kentang goreng ori</span> is three separate annotations, not one field.</p>
+      <p>The distribution is severely long-tailed — <span class="num">274</span> of the <span class="num">738</span> used classes appear three times or fewer, while <code>1</code> alone appears <span class="num">921</span> times.</p>
+      <div class="scroll">
+        <table>
+          <caption>Most frequent labels</caption>
+          <thead><tr><th>Label</th><th class="n">Count</th><th>Label</th><th class="n">Count</th><th>Label</th><th class="n">Count</th></tr></thead>
+          <tbody>
+            <tr><td><code>1</code></td><td class="n">921</td><td><code>2</code></td><td class="n">612</td><td><code>5</code></td><td class="n">408</td></tr>
+            <tr><td><code>es</code></td><td class="n">395</td><td><code>2000</code></td><td class="n">392</td><td><code>3</code></td><td class="n">392</td></tr>
+            <tr><td><code>15000</code></td><td class="n">350</td><td><code>5000</code></td><td class="n">339</td><td><code>10</code></td><td class="n">338</td></tr>
+            <tr><td><code>4</code></td><td class="n">325</td><td><code>20000</code></td><td class="n">250</td><td><code>teh</code></td><td class="n">244</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="action"><b>Implication</b>Train a character-level recogniser, never a 739-way classifier. Treated as classes, three-quarters of the vocabulary has too few examples to learn and the model can never emit a product name it has not seen. Treated as character sequences, the same data teaches glyphs that compose into unseen words — so build the character dictionary from all 739 category names, not from the training split alone.</div>
+    </div>
+
+    <div class="finding note">
+      <div class="fhead"><span class="chip note">Context</span><h3>The form is a fixed template, which removes most of the layout problem</h3></div>
+      <p>Every receipt uses the same printed booklet with the same four ruled columns in the same positions. Nothing in the annotations marks a box as a price rather than a quantity — but nothing needs to. Field type is recoverable from horizontal position alone, and the column boundaries sit near <span class="num">0.21</span>, <span class="num">0.62</span> and <span class="num">0.77</span> of image width.</p>
+      <p>That geometric assignment is what made the arithmetic check below possible, and it collapses key-information extraction from a learned problem into a solved one for this document class. It also fixes the limit: the assumption holds for this booklet and fails for any other supplier's layout.</p>
+      <div class="action"><b>Implication</b>Do not spend model capacity on layout understanding for the MVP. Spend it on recognition, and treat generalisation beyond this template as declared future work.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The property worth building on</h2>
+    <div class="callout">
+      <p><b>Across 439 de-duplicated receipts, 992 of 1,011 reconstructed line items satisfy <span class="num">quantity &times; harga = jumlah</span> — 98.1%.</b></p>
+      <p>The document verifies itself. Every line carries a redundant third value, and the column total carries another. Because handwritten digit recognition is where errors will concentrate — and a wrong digit silently corrupts inventory in a way a shop owner cannot detect — this redundancy is not a nice-to-have. It is the mechanism by which the system can catch its own mistakes, and, using per-character confidence to search digit substitutions that restore the identity, sometimes repair them.</p>
+    </div>
+    <p>The <span class="num">19</span> violations deserve honesty rather than dismissal. Several are off by exactly a factor of ten, which points at digit grouping in this audit's geometric reconstruction rather than genuine writer error; others look like real mistakes by whoever wrote the note. Both categories matter. A reconciliation layer must therefore <em>flag</em> irreconcilable lines for user confirmation rather than silently rewriting them — the receipt is sometimes wrong, and the system must not pretend otherwise.</p>
+    <div class="scroll">
+      <table>
+        <caption>Constraint violations, sample</caption>
+        <thead><tr><th>Source</th><th class="n">Qty</th><th class="n">Harga</th><th class="n">Jumlah stated</th><th class="n">Jumlah implied</th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><code>nota383</code></th><td class="n">20</td><td class="n">2,500</td><td class="n">22,500</td><td class="n">50,000</td></tr>
+          <tr><th scope="row"><code>nota352</code></th><td class="n">3</td><td class="n">120,000</td><td class="n">36,000</td><td class="n">360,000</td></tr>
+          <tr><th scope="row"><code>nota117</code></th><td class="n">2</td><td class="n">6,000</td><td class="n">120,000</td><td class="n">12,000</td></tr>
+          <tr><th scope="row"><code>nota326</code></th><td class="n">5</td><td class="n">12,000</td><td class="n">12,000</td><td class="n">60,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What this changes</h2>
+    <ul>
+      <li><b>Re-derive the recognition dataset before training anything.</b> Split on source receipt; the current crops cannot support any claim about accuracy.</li>
+      <li><b>Synthetic data is the critical path, not the model.</b> Two or three handwriting styles across 440 notes will not generalise to an arbitrary supplier's handwriting. Because the form template is a known, renderable object, synthetic handwriting can be composited into real template cells — a far more tractable problem than synthesising receipts from nothing.</li>
+      <li><b>Character-level recognition, geometric field assignment.</b> The vocabulary is too long-tailed to classify and the layout is too fixed to need learning.</li>
+      <li><b>Report writer-held-out accuracy.</b> With a fixed template and a closed vocabulary, a random split flatters the model. Handwriting style is the axis that will break in deployment, so it is the axis to evaluate on.</li>
+      <li><b>Expect the deployment gap.</b> These photographs are flat, sharp and evenly lit. Real submissions will be angled, shadowed and creased, and none of that appears in the augmentation.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Reproduction</h2>
+    <p>Every figure above is recomputed from the COCO export by grouping images on the source identifier embedded in the Roboflow filename. The split replication reproduces the original <span class="num">1036 / 129 / 130</span> partition exactly, which is what licenses treating the contamination rates as measured rather than estimated.</p>
+    <pre>source_id  := regex ^(.*?)_jpg\.rf\.        # nota203_jpg.rf.93fc05...jpg -> nota203
+split      := train_test_split(image_ids, test_size=0.20, random_state=42)
+              then  train_test_split(temp, test_size=0.50, random_state=42)
+columns    := qty [0.02,0.21)  name [0.21,0.62)  harga [0.62,0.77)  jumlah [0.77,0.97)
+              as fractions of image width (1536 px, constant across the corpus)
+rows       := cluster annotation centres into bands of 0.025 x image height</pre>
+  </section>
+
+  <footer>
+    <div>Audit performed on the full COCO export (331 MB, 1,295 images, 18,585 annotations). Figures are measured, not sampled, except the printed-versus-handwritten determination, which rests on visual inspection of twelve receipts.</div>
+    <div>Prepared with AI assistance for the SNAPTOCK AI workstream, COMPFEST 18 AI Innovation Challenge.</div>
+  </footer>
+
+</div>
