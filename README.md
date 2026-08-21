@@ -17,7 +17,8 @@ and the top-level `docker compose` land here as they are built.
 | `ml/prepare_dataset.py` | Build the PaddleOCR recognition dataset (source-grouped split) |
 | `ml/finetune_rec.sh` | Fine-tune PP-OCRv5 recognition on handwritten nota |
 | `ml/configs/` | Training config, derived from PaddleOCR v3.7.0 |
-| `ml/generate_sales.py` | Synthetic daily sales flow for the forecasting engine |
+| `ml/generate_sales.py` | Synthetic daily demand per SKU |
+| `ml/simulate_inventory.py` | Demand → purchases + stock ledger, and a policy baseline |
 | `notebooks/02_train_ocr.ipynb` | **End-to-end run: download → prepare → train → evaluate** |
 | `notebooks/01_eda.ipynb` | Original exploratory analysis (split superseded — see banner) |
 | `docs/dataset-audit.html` | Forensic audit of the corpus. **Read this first.** |
