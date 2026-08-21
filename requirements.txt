@@ -1,0 +1,9 @@
+# Data preparation and synthetic generation.
+#
+# PaddlePaddle is NOT listed here on purpose: the correct wheel depends on your
+# CUDA version and installing the wrong one is the most common way to lose an
+# afternoon. Install it separately first, per
+# https://www.paddlepaddle.org.cn/en/install/quick
+#   e.g.  python -m pip install paddlepaddle-gpu==3.0.0
+numpy>=1.26
+Pillow>=10.0
