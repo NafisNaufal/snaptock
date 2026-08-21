@@ -13,18 +13,14 @@ and the top-level `docker compose` land here as they are built.
 
 | Path | |
 |---|---|
-| `ml/download_dataset.sh` | Fetch the nota-pembelian COCO export from Roboflow |
-| `ml/prepare_dataset.py` | Build the PaddleOCR recognition dataset (source-grouped split) |
-| `ml/finetune_rec.sh` | Fine-tune PP-OCRv5 recognition on handwritten nota |
-| `ml/configs/` | Training config, derived from PaddleOCR v3.7.0 |
-| `ml/generate_sales.py` | Synthetic daily demand per SKU |
-| `ml/simulate_inventory.py` | Demand → purchases + stock ledger, and a policy baseline |
-| `notebooks/02_train_ocr.ipynb` | **End-to-end OCR: download → prepare → train → evaluate** |
-| `notebooks/03_forecasting.ipynb` | **SBA vs Chronos-Bolt: forecast error + inventory outcome** |
-| `ml/sku_catalogue.csv` | 200 SKUs, names/prices/archetypes from the real corpus |
-| `notebooks/01_eda.ipynb` | Original exploratory analysis (split superseded — see banner) |
+| `notebooks/01_eda.ipynb` | Exploratory analysis of the nota corpus |
+| `notebooks/02_train_ocr.ipynb` | **Fine-tune PP-OCRv5 on handwritten nota** — download, prepare, train, evaluate |
+| `notebooks/03_forecasting.ipynb` | **SBA vs Chronos-Bolt** — generate data, backtest, inventory simulation |
 | `docs/dataset-audit.html` | Forensic audit of the corpus. **Read this first.** |
 | `docs/run-a-research.html` | Literature review behind the architecture choice |
+
+Each notebook is self-contained: it generates or downloads whatever it needs and defines
+its own functions. Nothing imports from anything else in this repository.
 
 ---
 
@@ -33,45 +29,19 @@ and the top-level `docker compose` land here as they are built.
 ```bash
 git clone <this repo> && cd compfest
 cp .env.example .env          # set ROBOFLOW_API_KEY
-python -m pip install -r requirements.txt
-
-bash ml/download_dataset.sh                                   # ~331 MB
-python ml/prepare_dataset.py \
-    --coco data/raw/train/_annotations.coco.json \
-    --images data/raw/train \
-    --out data/rec
+jupyter lab
 ```
 
-Expected:
+Open a notebook and run it top to bottom. Each one lists its own `pip install` line in
+the first cell; there is no shared requirements file because there are no shared modules.
 
-```
-train     308 receipts   906 images   12,652 crops
-val        66 receipts    66 images      989 crops
-test       66 receipts    66 images    1,023 crops
-```
-
-### Fine-tuning (GPU)
-
-Install PaddlePaddle **first and separately** — the wheel must match your CUDA
-version, and this is where setup usually fails:
+For the OCR notebook, install PaddlePaddle **first and separately** — the wheel must match
+your CUDA version and this is where setup usually fails:
 
 ```bash
-python -m pip install paddlepaddle-gpu==3.0.0    # check paddlepaddle.org.cn for your CUDA
+pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 python -c "import paddle; paddle.utils.run_check()"
 ```
-
-Then either run `notebooks/02_train_ocr.ipynb` top to bottom, or drive it
-from a shell:
-
-```bash
-bash ml/finetune_rec.sh ~/work
-```
-
-It clones PaddleOCR at a pinned tag, downloads pretrained weights, refuses to
-start if the split leaks, trains, and exports an inference model to
-`~/work/PaddleOCR/output/nota_rec_v5_mobile_infer/`.
-
----
 
 ## Two things that will bite you
 
@@ -86,12 +56,9 @@ breaks. Full numbers in `docs/dataset-audit.html`.
 distinct writers, so grouping by receipt still puts the same handwriting in
 every split. For an honest number, label writers into a CSV and pass it:
 
-```bash
-# writers.csv
-# source_id,writer_id
-# nota203,A
-# nota046,B
-python ml/prepare_dataset.py ... --writer-map writers.csv
+```python
+# in notebooks/02_train_ocr.ipynb
+WRITER_MAP = {'nota203': 'A', 'nota046': 'B', ...}   # section 2b
 ```
 
 Handwriting style — not receipt identity — is what breaks in deployment.
