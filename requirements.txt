@@ -7,3 +7,4 @@
 #   e.g.  python -m pip install paddlepaddle-gpu==3.0.0
 numpy>=1.26
 Pillow>=10.0
+matplotlib>=3.8

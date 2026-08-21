@@ -18,6 +18,7 @@ and the top-level `docker compose` land here as they are built.
 | `ml/finetune_rec.sh` | Fine-tune PP-OCRv5 recognition on handwritten nota |
 | `ml/configs/` | Training config, derived from PaddleOCR v3.7.0 |
 | `ml/generate_sales.py` | Synthetic daily sales flow for the forecasting engine |
+| `notebooks/02_train_ocr.ipynb` | **End-to-end run: download → prepare → train → evaluate** |
 | `notebooks/01_eda.ipynb` | Original exploratory analysis (split superseded — see banner) |
 | `docs/dataset-audit.html` | Forensic audit of the corpus. **Read this first.** |
 | `docs/run-a-research.html` | Literature review behind the architecture choice |
@@ -56,7 +57,8 @@ python -m pip install paddlepaddle-gpu==3.0.0    # check paddlepaddle.org.cn for
 python -c "import paddle; paddle.utils.run_check()"
 ```
 
-Then:
+Then either run `notebooks/02_train_ocr.ipynb` top to bottom, or drive it
+from a shell:
 
 ```bash
 bash ml/finetune_rec.sh ~/work
