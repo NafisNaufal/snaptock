@@ -29,3 +29,7 @@ venv/
 
 # OS
 .DS_Store
+
+# Original notebook — still contains the un-rotated API key.
+# Tracked copy lives at notebooks/01_eda.ipynb (scrubbed).
+clyde's.ipynb
