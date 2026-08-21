@@ -37,11 +37,12 @@ from pathlib import Path
 
 import numpy as np
 
-from generate_sales import CATALOGUE
+from generate_sales import CATALOGUE, load_catalogue
 
 
-def simulate(sales_rows, seed=42, review_days=21):
+def simulate(sales_rows, seed=42, review_days=21, catalogue=None):
     rng = np.random.default_rng(seed)
+    catalogue = catalogue or CATALOGUE
 
     demand = collections.defaultdict(dict)
     for r in sales_rows:
@@ -53,7 +54,7 @@ def simulate(sales_rows, seed=42, review_days=21):
 
     purchases, ledger = [], []
 
-    for sku_id, (name, price, archetype) in enumerate(CATALOGUE, start=1):
+    for sku_id, (name, price, archetype) in enumerate(catalogue, start=1):
         series = demand.get(sku_id, {})
         mean_daily = sum(series.values()) / max(len(span), 1)
 
@@ -99,12 +100,15 @@ def main():
     ap.add_argument("--sales", type=Path, default=Path("data/sim/sales.csv"))
     ap.add_argument("--out", type=Path, default=Path("data/sim"))
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--catalogue", type=Path, default=None)
+    ap.add_argument("--skus", type=int, default=None)
     args = ap.parse_args()
 
     with args.sales.open() as fh:
         sales_rows = list(csv.DictReader(fh))
 
-    purchases, ledger = simulate(sales_rows, seed=args.seed)
+    purchases, ledger = simulate(sales_rows, seed=args.seed,
+                                 catalogue=load_catalogue(args.catalogue, args.skus))
 
     args.out.mkdir(parents=True, exist_ok=True)
     for name, rows in (("purchases", purchases), ("stock_ledger", ledger)):

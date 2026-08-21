@@ -69,12 +69,24 @@ def payday_mult(day_of_month):
     return 1.0
 
 
-def generate(days=120, seed=42, start=None):
+def load_catalogue(path, limit=None):
+    """CSV: product_name,unit_price,archetype[,...]. Falls back to CATALOGUE."""
+    if path is None:
+        return CATALOGUE
+    rows = []
+    with Path(path).open() as fh:
+        for r in csv.DictReader(fh):
+            rows.append((r["product_name"], int(r["unit_price"]), r["archetype"]))
+    return rows[:limit] if limit else rows
+
+
+def generate(days=120, seed=42, start=None, catalogue=None):
     rng = np.random.default_rng(seed)
     start = start or date.today() - timedelta(days=days)
+    catalogue = catalogue or CATALOGUE
     rows = []
 
-    for sku_id, (name, price, archetype) in enumerate(CATALOGUE, start=1):
+    for sku_id, (name, price, archetype) in enumerate(catalogue, start=1):
         cfg = ARCHETYPES[archetype]
 
         for offset in range(days):
@@ -130,9 +142,13 @@ def main():
     ap.add_argument("--days", type=int, default=120)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--catalogue", type=Path, default=None,
+                    help="CSV of SKUs; defaults to the built-in 20")
+    ap.add_argument("--skus", type=int, default=None, help="cap catalogue size")
     args = ap.parse_args()
 
-    rows = generate(days=args.days, seed=args.seed)
+    catalogue = load_catalogue(args.catalogue, args.skus)
+    rows = generate(days=args.days, seed=args.seed, catalogue=catalogue)
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -142,17 +158,19 @@ def main():
             writer.writerows(rows)
         print(f"wrote {len(rows)} rows -> {args.out}\n")
 
-    print(f"{len(rows)} sale lines over {args.days} days, {len(CATALOGUE)} SKUs\n")
+    print(f"{len(rows)} sale lines over {args.days} days, {len(catalogue)} SKUs\n")
     print("sale_date   sku  product_name          qty  unit_price   revenue")
     print("-" * 66)
     for r in rows[:8]:
         print(f"{r['sale_date']}  {r['sku_id']:>3}  {r['product_name']:<20} "
               f"{r['qty']:>4}  {r['unit_price']:>9,}  {r['revenue']:>8,}")
 
+    if len(catalogue) > 30:
+        return
     print("\nper-SKU demand pattern")
     print("-" * 96)
     print(f"{'product':<16}{'intended':<14}{'ADI':>6}{'CV²':>7}  {'classified':<13}daily demand")
-    for sku_id, (name, price, archetype) in enumerate(CATALOGUE, start=1):
+    for sku_id, (name, price, archetype) in enumerate(catalogue, start=1):
         series = [0] * args.days
         base = min(r["sale_date"] for r in rows)
         for r in rows:

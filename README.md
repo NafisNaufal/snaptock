@@ -19,7 +19,9 @@ and the top-level `docker compose` land here as they are built.
 | `ml/configs/` | Training config, derived from PaddleOCR v3.7.0 |
 | `ml/generate_sales.py` | Synthetic daily demand per SKU |
 | `ml/simulate_inventory.py` | Demand → purchases + stock ledger, and a policy baseline |
-| `notebooks/02_train_ocr.ipynb` | **End-to-end run: download → prepare → train → evaluate** |
+| `notebooks/02_train_ocr.ipynb` | **End-to-end OCR: download → prepare → train → evaluate** |
+| `notebooks/03_forecasting.ipynb` | **SBA vs Chronos-Bolt: forecast error + inventory outcome** |
+| `ml/sku_catalogue.csv` | 200 SKUs, names/prices/archetypes from the real corpus |
 | `notebooks/01_eda.ipynb` | Original exploratory analysis (split superseded — see banner) |
 | `docs/dataset-audit.html` | Forensic audit of the corpus. **Read this first.** |
 | `docs/run-a-research.html` | Literature review behind the architecture choice |

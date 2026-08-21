@@ -8,3 +8,9 @@
 numpy>=1.26
 Pillow>=10.0
 matplotlib>=3.8
+
+# Forecasting notebook (notebooks/03_forecasting.ipynb) only
+pandas>=2.2
+statsforecast>=1.7
+# chronos-forecasting and torch are heavy; install when running the comparison:
+#   pip install chronos-forecasting torch
