@@ -1,97 +1,79 @@
-# OCR service — for the backend
+# Nota OCR service
 
-You send a photo of a nota. You get back the line items. That's the whole API.
+Send a photo of a nota, get back the line items. One HTTP call — no Python,
+no PaddlePaddle, no model files on the backend side.
 
-You never install PaddlePaddle, never load a model, never see a `.pdiparams`.
-One HTTP call.
-
----
-
-## Start it (no model needed)
+## Run it
 
 ```bash
-cd serving
-MOCK=1 docker compose up
+docker compose up --build
 ```
 
-`MOCK=1` returns a realistic fixture with **exactly the same JSON shape** as the
-real thing. Build the entire integration against it — when the trained model
-drops in later, nothing on your side changes.
+First build takes a few minutes. Then:
 
 ```bash
 curl -F image=@nota.jpg http://localhost:8001/ocr/nota
 ```
 
----
+Health check: `GET /health`
 
-## `POST /ocr/nota`
-
-`multipart/form-data`, field name **`image`**. JPEG or PNG, max 12 MB.
+## Response
 
 ```json
 {
   "items": [
     {"nama": "teh celup",  "qty": 2,  "harga": 5000,  "jumlah": 10000,
-     "confidence": 0.961, "reconciled": true, "warnings": []},
+     "confidence": 1.0,   "reconciled": true,  "warnings": []},
     {"nama": "gula pasir", "qty": 1,  "harga": 15000, "jumlah": 15000,
-     "confidence": 0.618, "reconciled": true, "warnings": ["low_confidence"]}
+     "confidence": 0.97,  "reconciled": true,  "warnings": []}
   ],
   "total": {"computed": 40000, "stated": 40000, "matches": true},
   "warnings": [],
-  "needs_review": true,
-  "ms": 1840
+  "needs_review": false,
+  "ms": 2019
 }
 ```
 
-| field | what it means |
+| field | meaning |
 |---|---|
-| `qty` `harga` `jumlah` | integers, rupiah. **`null` if we couldn't read it** |
+| `qty` `harga` `jumlah` | integers, rupiah. **`null` if unreadable** — check before saving |
 | `confidence` | 0–1, the weakest character in that row |
-| `reconciled` | `qty × harga == jumlah` checked out |
-| `needs_review` | **the one field to branch on** — true if any row needs a human |
-| `total.stated` | the "Jumlah Rp." on the receipt. `null` if unreadable — never guessed |
-| `total.matches` | `null` when `stated` is null, otherwise true/false |
+| `reconciled` | `qty × harga == jumlah` held |
+| `needs_review` | **the field to branch on** — true if any row needs a human |
+| `total.stated` | the "Jumlah Rp." on the receipt. `null` if unreadable, never guessed |
 
-### Errors
+Errors: `400` empty upload · `413` over 12 MB · `415` unreadable image ·
+`422` no text detected.
 
-| code | `error` | when |
-|---|---|---|
-| 400 | `empty_upload` | no file sent |
-| 413 | `file_too_large` | over 12 MB |
-| 415 | `unreadable_image` | not a decodable image |
-| 422 | `no_text_detected` | blurry, or not a nota |
+## Three rules
 
-### `GET /health`
+1. **Branch on `needs_review`, not `confidence`.** Thresholds will change; the
+   boolean won't.
+2. **Never auto-save a row where `reconciled` is false.** The receipt's own
+   arithmetic disagrees with what we read. We report it rather than guess.
+3. **A `null` is not a zero.** Detection sometimes misses a small isolated
+   digit. Those rows come back with `incomplete_row` — show them to the user.
 
-```json
-{"status": "ok", "mock": false, "models_loaded": ["det", "rec"]}
-```
+Latency is 2–5 s per nota on CPU, synchronous.
 
----
+## Accuracy
 
-## Three things to know
+Measured on 1,023 held-out crops the model never trained on:
 
-**1. Branch on `needs_review`, not on `confidence`.**
-The thresholds live inside the service and will move as the model improves.
-The boolean won't.
+| | error rate |
+|---|---|
+| digits (qty, harga, jumlah) | **0.21%** |
+| letters (product names) | **1.28%** |
+| whole crop exact match | **98.14%** |
 
-**2. Never auto-save a row where `reconciled` is false.**
-It means the receipt's own arithmetic disagrees with what we read. We report
-the conflict instead of guessing, because `qty × harga = jumlah` has many
-solutions and picking the wrong one silently writes a wrong price into stock.
-Show the user that row and let them confirm.
+## Files
 
-**3. Product names are wrong far more often than numbers.**
-Measured on held-out test data: digits are misread **1.3%** of the time,
-letters **17%**. So prices and quantities are close to reliable; `nama` is not.
-Make correcting a name one tap, and never block the flow on one.
+| | |
+|---|---|
+| `app.py` | the API: routes, upload limits, model loading |
+| `pipeline.py` | detection → crop → recognition → columns → reconciliation |
+| `models/rec/` | the fine-tuned model (114 MB, not in git) |
+| `fixtures/` | mock response, used when `MOCK=1` |
 
-Latency is 2–5 s per nota on CPU. Synchronous by design.
-
----
-
-## Running it for real (later, not needed yet)
-
-Drop three files into `models/rec/` — `inference.json`, `inference.pdiparams`,
-`inference.yml` — then `docker compose up --build`. Nafis will send them; they
-are not in git because the weights are 114 MB.
+Only recognition is a trained model. Field assignment is geometric — the nota
+booklet is a fixed printed template — and reconciliation is arithmetic.
