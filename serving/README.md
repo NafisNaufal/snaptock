@@ -5,17 +5,36 @@ no PaddlePaddle, no model files on the backend side.
 
 ## Run it
 
+This is a standalone Python service. Your backend just makes an HTTP call to it
+— it does not matter what your backend is written in, or whether you use Docker
+for it.
+
+**With Docker** (recommended — you never install PaddlePaddle):
+
 ```bash
 docker compose up --build
 ```
 
-First build takes a few minutes. Then:
+**Without Docker** (Python 3.10+):
+
+```bash
+pip install -r requirements.txt
+pip install paddlepaddle==3.0.0 paddleocr==3.7.0
+MODEL_DIR=models/rec uvicorn app:app --port 8001
+```
+
+Either way it listens on `http://localhost:8001`:
 
 ```bash
 curl -F image=@nota.jpg http://localhost:8001/ocr/nota
 ```
 
 Health check: `GET /health`
+
+> If the direct install fails with a `paddle.pir` circular import, an unrelated
+> PyPI package called `paddle` has shadowed PaddlePaddle. Fix:
+> `pip uninstall -y paddle && pip install --force-reinstall paddlepaddle==3.0.0`
+> This is the main reason Docker is recommended.
 
 ## Response
 
