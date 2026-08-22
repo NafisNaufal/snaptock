@@ -1,0 +1,20 @@
+# Standalone compose for the OCR service. When the full app comes together,
+# fold this service into the repo-root docker-compose.yml that the rulebook
+# requires, alongside the Express API and the Next.js frontend.
+
+services:
+  ocr:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      # MOCK=1 serves fixtures with no model and no paddle. The backend can be
+      # built entirely against this while the model is still training.
+      MOCK: "${MOCK:-0}"
+      MODEL_DIR: /app/models/rec
+      REC_MODEL_NAME: PP-OCRv5_mobile_rec
+    volumes:
+      # Weights live outside git. Drop the three exported files in ./models/rec
+      # (inference.json, inference.pdiparams, inference.yml).
+      - ./models:/app/models:ro
+    restart: unless-stopped

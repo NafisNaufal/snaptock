@@ -33,3 +33,6 @@ venv/
 # Original notebook — still contains the un-rotated API key.
 # Tracked copy lives at notebooks/01_eda.ipynb (scrubbed).
 clyde's.ipynb
+
+# Model weights — 114 MB exceeds GitHub's 100 MB file limit
+serving/models/rec/

@@ -1,0 +1,14 @@
+{
+  "items": [
+    {"nama": "teh celup", "qty": 2, "harga": 5000, "jumlah": 10000,
+     "confidence": 0.961, "reconciled": true, "warnings": []},
+    {"nama": "kopi sachet", "qty": 10, "harga": 1500, "jumlah": 15000,
+     "confidence": 0.944, "reconciled": true, "warnings": []},
+    {"nama": "gula pasir", "qty": 1, "harga": 15000, "jumlah": 15000,
+     "confidence": 0.618, "reconciled": true, "warnings": ["low_confidence"]}
+  ],
+  "total": {"computed": 40000, "stated": 40000, "matches": true},
+  "warnings": [],
+  "needs_review": true,
+  "ms": 1840
+}
