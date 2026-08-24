@@ -117,7 +117,7 @@ def _font(size):
 
 
 def render(layout: Layout, vocabulary, rng: random.Random,
-           size=(1000, 1400), realistic=True) -> dict:
+           size=(1000, 1400), realistic=True, pool=None) -> dict:
     """Draw one nota and return it with exact ground truth."""
     W, H = size
     img = Image.new("RGB", size, layout.tint)
@@ -155,6 +155,25 @@ def render(layout: Layout, vocabulary, rng: random.Random,
                 return trial
             size -= 1
         return face(path, 8)
+
+    def paste_generated(text, cx, cy, role, row, max_w, max_h):
+        """Composite a real generated handwriting image into the cell.
+        Returns True if the pool had this word."""
+        patch = pool.get(text) if pool is not None else None
+        if patch is None:
+            return False
+        scale = min(max_w / patch.width, max_h / patch.height, 1.0)
+        tw, th = max(1, int(patch.width * scale)), max(1, int(patch.height * scale))
+        patch = patch.resize((tw, th), Image.LANCZOS)
+        x0, y0 = int(cx - tw / 2), int(cy - th / 2)
+        # generated crops are white-on-white outside the strokes; multiply so the
+        # paper tint and the ruled lines show through
+        region = img.crop((x0, y0, x0 + tw, y0 + th))
+        from PIL import ImageChops
+        img.paste(ImageChops.multiply(region, patch), (x0, y0))
+        boxes.append({"x": x0, "y": y0, "w": tw, "h": th, "text": str(text),
+                      "role": role, "row": row})
+        return True
 
     def put(text, cx, cy, role, row, font, anchor="mm", max_w=None, path=None):
         if max_w:
@@ -197,8 +216,12 @@ def render(layout: Layout, vocabulary, rng: random.Random,
         for i, role in enumerate(layout.order):
             cx = (edges[i] + edges[i + 1]) / 2 * W
             cell_w = (edges[i + 1] - edges[i]) * W * 0.88
-            put(values[role], cx, cy, role, r, cell_font,
-                max_w=cell_w, path=hand_path)
+            # Prefer real generated handwriting; fall back to a font when the
+            # verified pool does not contain this word.
+            if not paste_generated(values[role], cx, cy, role, r,
+                                   cell_w, row_h * 0.85):
+                put(values[role], cx, cy, role, r, cell_font,
+                    max_w=cell_w, path=hand_path)
 
     # Total row: label sits in the second-to-last column, value in the last.
     ty = hy + (layout.n_rows + 1) * row_h + row_h * 0.7
@@ -314,7 +337,8 @@ def warp_boxes(boxes, M, W, H, pad=0.10, min_side=8):
     return out
 
 
-def build_dataset(out_dir, n=2000, seed=0, vocabulary_csv=None, size=(1000, 1400)):
+def build_dataset(out_dir, n=2000, seed=0, vocabulary_csv=None,
+                  size=(1000, 1400), pool_dir=None):
     """Write a PaddleOCR-format recognition dataset plus detection labels.
 
     Splits by LAYOUT, not by document: the held-out set uses column orders the
@@ -328,6 +352,13 @@ def build_dataset(out_dir, n=2000, seed=0, vocabulary_csv=None, size=(1000, 1400
     out = Path(out_dir)
     rng = random.Random(seed)
     vocab = load_vocabulary(vocabulary_csv)
+    pool = None
+    if pool_dir:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from wordpool import WordPool
+        pool = WordPool(pool_dir, seed=seed)
+        print(f"word pool: {len(pool)} verified images, {len(pool.index)} words")
 
     held_out = {tuple(COLUMN_ORDERS[-1]), tuple(COLUMN_ORDERS[-2])}
     counts = {"train": 0, "test": 0}
@@ -342,7 +373,7 @@ def build_dataset(out_dir, n=2000, seed=0, vocabulary_csv=None, size=(1000, 1400
     while made < n:
         layout = sample_layout(rng)
         split = "test" if tuple(layout.order) in held_out else "train"
-        doc = render(layout, vocab, rng, size=size)
+        doc = render(layout, vocab, rng, size=size, pool=pool)
         page, idx = doc["image"], counts[split]
         name = f"{idx:06d}.jpg"
         cv2.imwrite(str(out / split / "pages" / name), page[:, :, ::-1])
