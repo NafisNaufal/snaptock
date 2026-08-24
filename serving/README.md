@@ -94,5 +94,10 @@ Measured on 1,023 held-out crops the model never trained on:
 | `models/rec/` | the fine-tuned model (114 MB, not in git) |
 | `fixtures/` | mock response, used when `MOCK=1` |
 
-Only recognition is a trained model. Field assignment is geometric — the nota
-booklet is a fixed printed template — and reconciliation is arithmetic.
+| `layout.py` | discovers the table: columns by clustering, roles by arithmetic |
+
+Only recognition is a trained model. Table structure is **discovered per
+document**, not assumed: columns are found by clustering box positions, and
+which column is `harga` versus `jumlah` is decided by whichever assignment
+makes `qty × harga = jumlah` hold across the rows. That means a different
+supplier's template works without recalibration.

@@ -1,75 +1,19 @@
 """
 Detected text boxes -> validated line items.
 
-The Indonesian nota booklet is a fixed printed template, so the form tells us
-where the table is. We locate two printed landmarks and read only between them:
+Structure is discovered per document (see layout.py): columns are found by
+clustering box positions, and their roles are decided by which assignment makes
+the receipt's own arithmetic add up. Nothing here assumes a particular
+supplier's template.
 
-    BANYAKNYA | NAMA BARANG | HARGA | JUMLAH     <- header, items start below
-    ...handwritten rows...
-    Jumlah Rp.                     40000        <- footer, grand total
-
-Column boundaries are fractions of image width, measured across the corpus
-(see docs/dataset-audit.html). This holds for this booklet and fails for other
-suppliers' layouts -- a deliberate, declared limit of the MVP.
+The response shape is fixed - the backend depends on it.
 """
 
 from __future__ import annotations
 
-import re
+from layout import (assign_roles, build_grid, is_number, to_int)
 
-COLUMNS = [("qty", 0.02, 0.21), ("nama", 0.21, 0.62),
-           ("harga", 0.62, 0.77), ("jumlah", 0.77, 0.97)]
-
-ROW_BAND = 0.025          # rows cluster into bands of 2.5% of image height
 MIN_CONFIDENCE = 0.70     # below this, ask a human to confirm the row
-
-HEADER_WORDS = {"banyaknya", "namabarang", "harga", "jumlah"}
-TOTAL_WORDS = {"jumlahrp", "jumlahrp."}
-
-
-def norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower())
-
-
-def to_int(text: str) -> int | None:
-    digits = re.sub(r"[^0-9]", "", text)
-    return int(digits) if digits else None
-
-
-def column_of(cx: float, width: int) -> str | None:
-    frac = cx / width
-    for name, lo, hi in COLUMNS:
-        if lo <= frac < hi:
-            return name
-    return None
-
-
-def to_bands(boxes, width: int, height: int) -> dict[int, dict]:
-    """Group boxes into {band: {column: [box, ...]}}."""
-    bands: dict[int, dict] = {}
-    for b in boxes:
-        col = column_of(b["x"] + b["w"] / 2, width)
-        if col:
-            band = int((b["y"] + b["h"] / 2) // (height * ROW_BAND))
-            bands.setdefault(band, {}).setdefault(col, []).append(b)
-    return bands
-
-
-def find_landmarks(bands) -> tuple[int, int]:
-    """Band index of the printed column header, and of the 'Jumlah Rp.' row."""
-    header, total = -1, 10 ** 6
-    for band, cols in bands.items():
-        words = {norm(b["text"]) for boxes in cols.values() for b in boxes}
-        if len(words & HEADER_WORDS) >= 2:
-            header = max(header, band)
-        if words & TOTAL_WORDS:
-            total = min(total, band)
-    return header, total
-
-
-def cell_text(cols, name) -> str:
-    boxes = sorted(cols.get(name, []), key=lambda b: b["x"])
-    return " ".join(b["text"] for b in boxes)
 
 
 def reconcile(qty, harga, jumlah) -> tuple[bool, list[str]]:
@@ -89,45 +33,61 @@ def reconcile(qty, harga, jumlah) -> tuple[bool, list[str]]:
 
 
 def assemble(boxes, width: int, height: int) -> dict:
-    bands = to_bands(boxes, width, height)
-    header, total_band = find_landmarks(bands)
+    rows, cols = build_grid(boxes, width, height)
+    if not rows or not cols:
+        return {"items": [], "total": {"computed": 0, "stated": None, "matches": None},
+                "warnings": ["no_text_detected"], "needs_review": True}
 
-    items, warnings = [], []
-    for band in sorted(bands):
-        if band <= header or band >= total_band:
-            continue                                  # outside the table
-        cols = bands[band]
-        nama = cell_text(cols, "nama").strip()
-        qty = to_int(cell_text(cols, "qty"))
-        harga = to_int(cell_text(cols, "harga"))
-        jumlah = to_int(cell_text(cols, "jumlah"))
+    roles = assign_roles(boxes, rows, cols)
+    cell, row_of, col_of = roles["cell"], roles["row_of"], roles["col_of"]
 
-        if not nama or harga is None:
-            continue                                  # blank row on the form
+    def value(r, role):
+        col = roles[role]
+        return cell.get((r, col)) if col is not None else None
 
-        confidence = min(b["conf"] for bs in cols.values() for b in bs)
+    # worst character confidence in a row, for the rows we keep
+    row_conf: dict[int, float] = {}
+    for i, b in enumerate(boxes):
+        r = row_of[i]
+        row_conf[r] = min(row_conf.get(r, 1.0), b["conf"])
+
+    items, warnings, last_item_row = [], [], -1
+    for r in range(len(rows)):
+        nama = (value(r, "nama") or "").strip()
+        harga = to_int(value(r, "harga") or "")
+        jumlah = to_int(value(r, "jumlah") or "")
+        qty = to_int(value(r, "qty") or "")
+
+        # A line item needs a word for a name and a price. Printed headers fail
+        # this (their "harga" cell reads the word "harga", not a number).
+        if not nama or is_number(nama) or harga is None:
+            continue
+
         reconciled, item_warnings = reconcile(qty, harga, jumlah)
+        confidence = row_conf.get(r, 0.0)
         if confidence < MIN_CONFIDENCE:
             item_warnings.append("low_confidence")
 
         items.append({"nama": nama, "qty": qty, "harga": harga, "jumlah": jumlah,
                       "confidence": round(confidence, 3),
                       "reconciled": reconciled, "warnings": item_warnings})
+        last_item_row = r
 
-    # Grand total: the number in the JUMLAH column of the "Jumlah Rp." row.
+    # Grand total: a jumlah value below the last item, with no item beside it.
     stated = None
-    if total_band in bands:
-        stated = to_int(cell_text(bands[total_band], "jumlah"))
+    for r in range(last_item_row + 1, len(rows)):
+        candidate = to_int(value(r, "jumlah") or "")
+        nama = (value(r, "nama") or "").strip()
+        if candidate is not None and (not nama or is_number(nama)):
+            stated = candidate
+            break
 
     computed = sum(i["jumlah"] for i in items if i["jumlah"] is not None)
 
     if not items:
         warnings.append("no_line_items_found")
-    if header < 0:
-        warnings.append("table_header_not_found")
     if stated is None:
-        # Never invent it. Unknown is not zero.
-        warnings.append("grand_total_not_found")
+        warnings.append("grand_total_not_found")   # unknown is not zero
         matches = None
     else:
         matches = computed == stated
