@@ -83,6 +83,18 @@ def column_profile(boxes, members) -> dict:
     }
 
 
+def column_magnitude(cell, rows, col) -> float:
+    """Median numeric value in a column. Quantities are small, prices are not --
+    this is what separates them, because qty x harga == harga x qty and the
+    arithmetic alone cannot tell the two columns apart."""
+    values = []
+    for r in range(len(rows)):
+        v = to_int(cell.get((r, col)) or "")
+        if v is not None:
+            values.append(v)
+    return sorted(values)[len(values) // 2] if values else float("inf")
+
+
 def score_assignment(cell, rows, qty_c, harga_c, jumlah_c) -> tuple[float, int]:
     """(rate, count) of rows where qty x harga == jumlah under this assignment."""
     checked = matched = 0
@@ -113,14 +125,24 @@ def assign_roles(boxes, rows, cols) -> dict:
         cell[key] = (cell.get(key, "") + " " + b["text"]).strip()
 
     indices = list(range(len(cols)))
-    best = {"score": 0.0, "matched": 0, "qty": None, "harga": None, "jumlah": None}
+    best = {"score": 0.0, "matched": 0, "plausible": 0.0,
+            "qty": None, "harga": None, "jumlah": None}
 
     def consider(qty_c, harga_c, jumlah_c):
         nonlocal best
         score, matched = score_assignment(cell, rows, qty_c, harga_c, jumlah_c)
-        # Prefer more reconciled rows; break ties on the higher rate.
-        if (matched, score) > (best["matched"], best["score"]):
-            best = {"score": score, "matched": matched,
+        if matched == 0:
+            return
+        # Multiplication is commutative, so swapping qty and harga reconciles
+        # equally well. Break that tie on magnitude: quantities are small.
+        plausible = 1.0
+        if qty_c is not None:
+            q_mag, h_mag = (column_magnitude(cell, rows, qty_c),
+                            column_magnitude(cell, rows, harga_c))
+            plausible = 1.0 if q_mag <= h_mag else 0.0
+        key = (matched, plausible, score)
+        if key > (best["matched"], best.get("plausible", 0.0), best["score"]):
+            best = {"score": score, "matched": matched, "plausible": plausible,
                     "qty": qty_c, "harga": harga_c, "jumlah": jumlah_c}
 
     for qty_c, harga_c, jumlah_c in permutations(indices, 3):
@@ -128,6 +150,17 @@ def assign_roles(boxes, rows, cols) -> dict:
     if best["matched"] == 0:                     # quantity column missing or unread
         for harga_c, jumlah_c in permutations(indices, 2):
             consider(None, harga_c, jumlah_c)
+    if best["matched"] == 0:
+        # No unit-price column at all: some booklets print only qty and total.
+        # The money column is the one with the largest values.
+        numeric = [i for i in indices
+                   if profiles[i]["numeric_frac"] >= 0.5 and profiles[i]["n"] >= 2]
+        if numeric:
+            jumlah_c = max(numeric, key=lambda i: column_magnitude(cell, rows, i))
+            rest = [i for i in numeric if i != jumlah_c]
+            qty_c = min(rest, key=lambda i: column_magnitude(cell, rows, i)) if rest else None
+            best = {"score": 0.0, "matched": 0, "plausible": 0.0,
+                    "qty": qty_c, "harga": None, "jumlah": jumlah_c}
 
     used = {best["qty"], best["harga"], best["jumlah"]}
     candidates = [i for i in indices if i not in used]
