@@ -117,12 +117,26 @@ def _font(size):
 
 
 def render(layout: Layout, vocabulary, rng: random.Random,
-           size=(1000, 1400)) -> dict:
+           size=(1000, 1400), realistic=True) -> dict:
     """Draw one nota and return it with exact ground truth."""
     W, H = size
     img = Image.new("RGB", size, layout.tint)
     draw = ImageDraw.Draw(img)
-    head_font, cell_font = _font(int(H * 0.019)), _font(int(H * 0.023))
+    # One writer per nota, one printer per form. Re-picking a face per cell
+    # would teach the recogniser that handwriting changes mid-document.
+    hand_path = rng.choice(available(HAND_FONTS)) if realistic and available(HAND_FONTS) else None
+    print_path = rng.choice(available(PRINT_FONTS)) if realistic and available(PRINT_FONTS) else None
+
+    def face(path, size):
+        if not path:
+            return _font(size)
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            return _font(size)
+
+    head_font = face(print_path, int(H * 0.019))
+    cell_font = face(hand_path, int(H * 0.024))
 
     # column x-boundaries
     edges, x = [0.05], 0.05
@@ -131,7 +145,20 @@ def render(layout: Layout, vocabulary, rng: random.Random,
         edges.append(x)
     boxes = []
 
-    def put(text, cx, cy, role, row, font, anchor="mm"):
+    def fit(text, font, max_w, path):
+        """Shrink until the text fits its cell, keeping the same face.
+        Overlapping text would teach the recogniser to read two words as one."""
+        size = getattr(font, "size", 20)
+        while size > 8:
+            trial = face(path, size)
+            if draw.textlength(str(text), font=trial) <= max_w:
+                return trial
+            size -= 1
+        return face(path, 8)
+
+    def put(text, cx, cy, role, row, font, anchor="mm", max_w=None, path=None):
+        if max_w:
+            font = fit(text, font, max_w, path)
         bbox = draw.textbbox((cx, cy), str(text), font=font, anchor=anchor)
         draw.text((cx, cy), str(text), fill=(20, 20, 30), font=font, anchor=anchor)
         boxes.append({"x": bbox[0], "y": bbox[1], "w": bbox[2] - bbox[0],
@@ -151,7 +178,9 @@ def render(layout: Layout, vocabulary, rng: random.Random,
 
     for i, role in enumerate(layout.order):
         cx = (edges[i] + edges[i + 1]) / 2 * W
-        put(layout.header_text[role], cx, hy + row_h / 2, f"header_{role}", -1, head_font)
+        cell_w = (edges[i + 1] - edges[i]) * W * 0.92
+        put(layout.header_text[role], cx, hy + row_h / 2, f"header_{role}", -1,
+            head_font, max_w=cell_w, path=print_path)
 
     n_items = rng.randint(1, min(6, layout.n_rows - 1))
     items, running = [], 0
@@ -167,12 +196,184 @@ def render(layout: Layout, vocabulary, rng: random.Random,
                   "harga": f"{harga:,}".replace(",", "."), "jumlah": f"{jumlah:,}".replace(",", ".")}
         for i, role in enumerate(layout.order):
             cx = (edges[i] + edges[i + 1]) / 2 * W
-            put(values[role], cx, cy, role, r, cell_font)
+            cell_w = (edges[i + 1] - edges[i]) * W * 0.88
+            put(values[role], cx, cy, role, r, cell_font,
+                max_w=cell_w, path=hand_path)
 
-    ty = hy + (layout.n_rows + 1) * row_h + row_h * 0.6
-    put(layout.total_label, edges[-2] * W, ty, "total_label", -2, cell_font, anchor="lm")
-    put(f"{running:,}".replace(",", "."), (edges[-1] - 0.01) * W, ty,
-        "total_value", -2, cell_font, anchor="rm")
+    # Total row: label sits in the second-to-last column, value in the last.
+    ty = hy + (layout.n_rows + 1) * row_h + row_h * 0.7
+    label_w = (edges[-2] - edges[-3]) * W * 0.9 if len(edges) >= 3 else W * 0.2
+    put(layout.total_label, (edges[-2] - 0.012) * W, ty, "total_label", -2,
+        head_font, anchor="rm", max_w=label_w,
+        path=print_path)
+    put(f"{running:,}".replace(",", "."), (edges[-1] + edges[-2]) / 2 * W, ty,
+        "total_value", -2, cell_font, anchor="mm",
+        max_w=(edges[-1] - edges[-2]) * W * 0.88,
+        path=hand_path)
 
-    return {"image": np.array(img), "boxes": boxes, "items": items,
+    page = np.array(img)
+    if realistic:
+        page, M = degrade(page, rng)
+        boxes = warp_boxes(boxes, M, W, H)
+    return {"image": page, "boxes": boxes, "items": items,
             "total": running, "layout": layout}
+
+
+# The form is printed; the entries are handwritten. Rendering both with one
+# font is the single most unrealistic thing a naive generator does.
+HAND_FONTS = [
+    "/System/Library/Fonts/Supplemental/Bradley Hand Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Comic Sans MS.ttf",
+    "/System/Library/Fonts/Supplemental/Chalkduster.ttf",
+    "/System/Library/Fonts/Supplemental/Brush Script.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+]
+PRINT_FONTS = [
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+]
+
+
+def available(paths):
+    import os
+    return [p for p in paths if os.path.exists(p)]
+
+
+def pick_font(paths, size, rng):
+    found = available(paths)
+    if not found:
+        return _font(size)
+    try:
+        return ImageFont.truetype(rng.choice(found), size)
+    except OSError:
+        return _font(size)
+
+
+def degrade(img: np.ndarray, rng: random.Random):
+    """Phone-camera reality: warp, uneven light, blur, sensor noise, JPEG.
+
+    The corpus is flat, sharp and evenly lit, which is exactly what a real
+    submission is not. Without this the model learns a studio distribution.
+    """
+    import cv2
+
+    h, w = img.shape[:2]
+
+    # perspective: photographing a page you are not directly above
+    j = 0.02 + rng.random() * 0.05
+    src = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
+    dst = np.float32([[rng.uniform(0, w*j), rng.uniform(0, h*j)],
+                      [w - rng.uniform(0, w*j), rng.uniform(0, h*j)],
+                      [w - rng.uniform(0, w*j), h - rng.uniform(0, h*j)],
+                      [rng.uniform(0, w*j), h - rng.uniform(0, h*j)]])
+    M = cv2.getPerspectiveTransform(src, dst)
+    img = cv2.warpPerspective(img, M, (w, h), borderValue=(245, 245, 245))
+
+    # uneven illumination / shadow across the page
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    ang = rng.uniform(0, 2 * np.pi)
+    ramp = (np.cos(ang) * xx / w + np.sin(ang) * yy / h)
+    shade = 1.0 - rng.uniform(0.05, 0.35) * (ramp - ramp.min()) / (np.ptp(ramp) + 1e-6)
+    img = np.clip(img.astype(np.float32) * shade[..., None], 0, 255).astype(np.uint8)
+
+    if rng.random() < 0.7:
+        k = rng.choice([3, 3, 5])
+        img = cv2.GaussianBlur(img, (k, k), rng.uniform(0.4, 1.4))
+
+    img = np.clip(img.astype(np.int16) +
+                  rng.uniform(2, 9) * np.random.randn(h, w, 3), 0, 255).astype(np.uint8)
+
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY,
+                                         int(rng.uniform(45, 92))])
+    out = cv2.imdecode(buf, cv2.IMREAD_COLOR) if ok else img
+    return out, M
+
+
+def warp_boxes(boxes, M, W, H, pad=0.10, min_side=8):
+    """Move ground-truth boxes through the same perspective the page went
+    through. Cropping warped pixels with unwarped coordinates is silent
+    mislabelling -- the crop and its label stop matching."""
+    import cv2
+    out = []
+    for b in boxes:
+        corners = np.float32([[[b["x"], b["y"]], [b["x"] + b["w"], b["y"]],
+                               [b["x"] + b["w"], b["y"] + b["h"]],
+                               [b["x"], b["y"] + b["h"]]]])
+        moved = cv2.perspectiveTransform(corners, M)[0]
+        xs, ys = moved[:, 0], moved[:, 1]
+        x0, x1 = float(xs.min()), float(xs.max())
+        y0, y1 = float(ys.min()), float(ys.max())
+        # ink-tight boxes clip ascenders and can be a pixel tall; pad them out
+        px, py = (x1 - x0) * pad, max((y1 - y0) * pad, 3)
+        x0, y0 = max(0, x0 - px), max(0, y0 - py)
+        x1, y1 = min(W, x1 + px), min(H, y1 + py)
+        if x1 - x0 < min_side or y1 - y0 < min_side:
+            continue
+        out.append({**b, "x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0})
+    return out
+
+
+def build_dataset(out_dir, n=2000, seed=0, vocabulary_csv=None, size=(1000, 1400)):
+    """Write a PaddleOCR-format recognition dataset plus detection labels.
+
+    Splits by LAYOUT, not by document: the held-out set uses column orders the
+    model never trained on. A random split would let it memorise every layout
+    and report a number that means nothing for a new supplier's booklet.
+    """
+    import json
+    from pathlib import Path
+    import cv2
+
+    out = Path(out_dir)
+    rng = random.Random(seed)
+    vocab = load_vocabulary(vocabulary_csv)
+
+    held_out = {tuple(COLUMN_ORDERS[-1]), tuple(COLUMN_ORDERS[-2])}
+    counts = {"train": 0, "test": 0}
+    rec_lines = {"train": [], "test": []}
+    det_lines = {"train": [], "test": []}
+
+    for split in ("train", "test"):
+        (out / split / "crops").mkdir(parents=True, exist_ok=True)
+        (out / split / "pages").mkdir(parents=True, exist_ok=True)
+
+    made = 0
+    while made < n:
+        layout = sample_layout(rng)
+        split = "test" if tuple(layout.order) in held_out else "train"
+        doc = render(layout, vocab, rng, size=size)
+        page, idx = doc["image"], counts[split]
+        name = f"{idx:06d}.jpg"
+        cv2.imwrite(str(out / split / "pages" / name), page[:, :, ::-1])
+
+        polys = []
+        for k, b in enumerate(doc["boxes"]):
+            x, y, w, h = int(b["x"]), int(b["y"]), int(b["w"]), int(b["h"])
+            if w < 4 or h < 4:
+                continue
+            crop = page[max(0, y):y + h, max(0, x):x + w]
+            if crop.size == 0:
+                continue
+            crop_name = f"{idx:06d}_{k}.jpg"
+            cv2.imwrite(str(out / split / "crops" / crop_name), crop[:, :, ::-1])
+            rec_lines[split].append(f"crops/{crop_name}\t{b['text']}")
+            polys.append({"transcription": b["text"],
+                          "points": [[x, y], [x+w, y], [x+w, y+h], [x, y+h]]})
+        det_lines[split].append(f"pages/{name}\t{json.dumps(polys, ensure_ascii=False)}")
+        counts[split] += 1
+        made += 1
+
+    for split in ("train", "test"):
+        (out / f"{split}_rec.txt").write_text("\n".join(rec_lines[split]) + "\n")
+        (out / f"{split}_det.txt").write_text("\n".join(det_lines[split]) + "\n")
+
+    charset = sorted({c for line in rec_lines["train"] + rec_lines["test"]
+                      for c in line.split("\t")[1] if not c.isspace()})
+    (out / "dict.txt").write_text("\n".join(charset) + "\n")
+
+    meta = {"pages": counts, "held_out_layouts": [list(o) for o in held_out],
+            "crops": {k: len(v) for k, v in rec_lines.items()},
+            "charset_size": len(charset)}
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    return meta
