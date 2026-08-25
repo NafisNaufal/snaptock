@@ -79,11 +79,15 @@ Latency is 2–5 s per nota on CPU, synchronous.
 
 Measured on 1,023 held-out crops the model never trained on:
 
-| | error rate |
-|---|---|
-| digits (qty, harga, jumlah) | **0.21%** |
-| letters (product names) | **1.28%** |
-| whole crop exact match | **98.14%** |
+| | held-out real receipts | unseen layouts |
+|---|---|---|
+| digits (qty, harga, jumlah) | **0.13%** | **0.00%** |
+| letters (product names) | **1.08%** | **0.16%** |
+| character error, overall | **0.48%** | **0.06%** |
+| whole crop exact match | **98.24%** | **99.86%** |
+
+"Unseen layouts" means nota with column orders the model never trained on —
+a different supplier's form.
 
 ## Files
 
