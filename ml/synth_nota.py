@@ -259,8 +259,19 @@ PRINT_FONTS = [
 
 
 def available(paths):
+    """Existing fonts from `paths`, plus anything in SNAPTOK_FONT_DIR.
+
+    The corpus has two or three writers. A generator limited to whatever
+    happens to be installed inherits that poverty, so point this at a
+    directory of handwriting faces.
+    """
+    import glob
     import os
-    return [p for p in paths if os.path.exists(p)]
+    found = [p for p in paths if os.path.exists(p)]
+    extra_dir = os.environ.get("SNAPTOK_FONT_DIR")
+    if extra_dir and paths is HAND_FONTS:
+        found += sorted(glob.glob(os.path.join(extra_dir, "*.ttf")))
+    return found
 
 
 def pick_font(paths, size, rng):
