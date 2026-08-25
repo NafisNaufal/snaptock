@@ -94,14 +94,36 @@ a different supplier's form.
 | | |
 |---|---|
 | `app.py` | the API: routes, upload limits, model loading |
-| `pipeline.py` | detection → crop → recognition → columns → reconciliation |
+| `geometry.py` | levels the page, turns it the right way up, cuts each line out square |
+| `layout.py` | discovers the table: columns by clustering, roles by arithmetic |
+| `pipeline.py` | rows → reconciled line items → the response above |
 | `models/rec/` | the fine-tuned model (114 MB, not in git) |
 | `fixtures/` | mock response, used when `MOCK=1` |
 
-| `layout.py` | discovers the table: columns by clustering, roles by arithmetic |
+## Photos taken at any angle
+
+A nota is usually photographed in the hand, on a desk, often turned sideways.
+The recognizer only reads horizontal text, so orientation is fixed before
+anything is read — and it is fixed without a second model:
+
+- the detector returns one quadrilateral per text line, and text lines run along
+  the writing direction, so the average edge angle of those quads **is** the page
+  angle. That levels tilt and all four quarter turns.
+- an angle cannot tell upright from upside down. That last bit is settled by
+  reading the longest few lines both ways and keeping whichever the recognizer
+  is more confident about.
+- each line is then warped onto a rectangle rather than cropped to its bounding
+  box, so a slanted line no longer drags in the paper and the lines beside it.
 
 Only recognition is a trained model. Table structure is **discovered per
 document**, not assumed: columns are found by clustering box positions, and
 which column is `harga` versus `jumlah` is decided by whichever assignment
 makes `qty × harga = jumlah` hold across the rows. That means a different
 supplier's template works without recalibration.
+
+The same arithmetic settles a problem no clustering can reach. The detector
+sometimes swallows the quantity cell into the name cell, so `2 kg gula pasir`
+arrives as one text line — by then it is a single box. The parser splits the
+leading count off, reads the receipt both ways, and keeps whichever way adds
+up. A thousands separator (`67.500`) is not a count, and `2 kg` on its own is
+not an item called `kg`; both are rejected before the split is scored.

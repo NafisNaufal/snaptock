@@ -6,4 +6,4 @@ pillow>=10.0
 # Real inference only — not needed when MOCK=1.
 # paddlepaddle must match your platform; the CPU wheel is what ships in Docker.
 # paddlepaddle==3.0.0
-# paddleocr==3.7.0
+# paddleocr==3.7.0        # brings opencv, which geometry.py needs

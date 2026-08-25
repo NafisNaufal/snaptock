@@ -139,10 +139,16 @@ genuinely new writer.
 | | |
 |---|---|
 | `app.py` | routes, upload limits, model lifecycle |
-| `pipeline.py` | boxes → rows → columns → line items → reconciliation |
+| `geometry.py` | levels the page, turns it upright, cuts each line out square |
 | `layout.py` | column discovery; role assignment by arithmetic |
+| `pipeline.py` | rows → line items → reconciliation |
 | `models/rec/` | the fine-tuned recogniser (114 MB) |
 | `fixtures/` | the mock response |
 
-Detection uses stock PP-OCRv5; only recognition is fine-tuned. Field assignment
-is geometric and reconciliation is arithmetic — neither is a learned model.
+Detection uses stock PP-OCRv5; **only recognition is fine-tuned**. Orientation,
+line rectification, the table grid, column roles and reconciliation are geometry
+and arithmetic — none of them is a learned model.
+
+Photos taken sideways or at an angle are handled: the service recovers the page
+angle from the detector's own line geometry and turns the page upright before
+reading it. Your users do not need to be told to hold the phone straight.

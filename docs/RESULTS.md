@@ -109,21 +109,75 @@ best kept — no training, no template knowledge.
 
 | column order | fixed geometry | discovered |
 |---|---:|---:|
-| `nama harga qty jumlah` | 0% | **100%** |
 | `nama qty harga jumlah` | 0% | **100%** |
-| `no nama qty harga jumlah` | 0% | 92% |
-| `qty nama harga jumlah` *(the corpus layout)* | 98% | 100% |
-| `qty nama jumlah` *(no unit price column)* | 100% | 86% |
-| **overall (200 documents)** | **40.5%** | **95.5%** |
+| `nama harga qty jumlah` | 0% | **100%** |
+| `qty nama harga jumlah` *(the corpus layout)* | 97% | **97%** |
+| `qty nama jumlah` *(no unit-price column)* | 100% | 86% |
+| `no nama qty harga jumlah` | 0% | **94%** |
+| **overall (200 documents)** | **37.0%** | **96.0%** |
+
+Regenerate with `python ml/eval_layout_generalization.py`. The benchmark feeds
+ground-truth boxes from the generator, so it isolates layout understanding from
+recognition error.
 
 **A flaw the benchmark exposed.** Multiplication is commutative, so
 `qty × harga == harga × qty`: the arithmetic alone cannot distinguish the
 quantity column from the unit-price column, and both assignments reconcile
 perfectly. Breaking the tie on magnitude — quantities are small, prices are not
-— raised overall accuracy from 46% to 95.5%. The self-consistency signal is
+— raised overall accuracy from 46% to 95.5% at the time. The self-consistency signal is
 powerful but not sufficient; it needed one weak prior to become decisive.
 
 ---
+
+## 4b. Structure that survives a real photograph
+
+The benchmark above uses clean generated geometry. Real phone photographs of a
+nota break three further assumptions, each of which returned an **empty document**
+to the backend rather than a wrong one. All three were found by running real
+photos, and all three are measured.
+
+**The page is rarely upright.** A hand-held nota shot sideways yields a vertical
+sliver for every crop and an empty string for every prediction. Recovering the
+angle from the detector's own quadrilaterals, then confirming upright-vs-inverted
+with the recogniser's confidence:
+
+| | before | after |
+|---|---:|---:|
+| lines that read | 24 | **34** |
+| mean recognition confidence | 0.652 | **0.881** |
+
+A single levelling pass is not enough: on a page lying at 86° the detector is at
+its worst and its angle is ~2° out, which across a 3000-pixel page drags one end
+of every row a full row-pitch from the other. Iterating drops the residual from
+2.05° to 0.58°.
+
+**Detected boxes are taller than the line spacing.** Median box height 74 px
+against a 63 px row pitch, so every row overlaps its neighbours and a threshold
+drawn from box height never fires — six item rows collapsed into one. Measuring
+pitch down each column instead (one entry per row, so consecutive steps *are* the
+pitch) recovers the table. Anchoring each row on its running centre rather than on
+the gap to the previous box stops single-linkage chaining fusing four rows into
+one.
+
+**The detector welds the quantity cell onto the name cell.** `2 kg gula pasir`
+arrives as a single text line, and by then no clustering can separate it. Peeling
+the leading count off and scoring the document *both ways*, keeping whichever
+makes the receipt add up better — measured on 120 generated nota with the
+quantity deliberately welded into the name, 423 line items:
+
+| | before | after |
+|---|---:|---:|
+| item names recovered exactly | 0 (0%) | **333 (78.7%)** |
+| quantity also exactly right | 0 (0%) | **309 (73.0%)** |
+
+Two false positives this split had to be taught to avoid: a thousands separator
+(`67.500` is not a count of 67 and an item called `.500`) and a one-letter unit
+(`g` for gram ate the first letter of every item beginning with one — `gorengan`
+became a gram of `orengan`).
+
+**None of this cost the corpus anything.** Across 40 held-out real receipts run
+end to end through the service, rows reconciling went 89.6% → 89.3% — one line
+item's difference.
 
 ## 5. Error analysis
 
@@ -172,21 +226,33 @@ writers is roughly an hour of work and would make these numbers honest.
 but the released IAM-trained model produces label-accurate output only 50% of
 the time on Indonesian words and long numerals — `15000` renders as `115000`.
 Everything it generates is therefore gated by reading it back with the
-recogniser and discarding mismatches. Fine-tuning that generator on real nota
-crops is the outstanding work.
+recogniser and discarding mismatches, which is why it contributes little volume.
+
+**Recognition on out-of-domain photographs is materially worse than the table
+in section 3.** Those figures are measured on held-out crops from the same
+corpus. On phone photographs of a different shop's nota book the recogniser
+reads `gula pasir` as `ghtsparir` and 16000 as 18000. The structural work in
+section 4b is what turns that from an empty response into pre-filled rows
+flagged for correction; it does not make the reading correct.
 
 ---
 
 ## 7. Reproducing
 
+Dataset preparation and training live in `notebooks/02_train_ocr.ipynb`, which is
+self-contained — it downloads the corpus, builds the recognition crops with the
+receipt-grouped split, fine-tunes and evaluates. The standalone scripts cover the
+synthetic data and the layout benchmark:
+
 ```bash
-python ml/prepare_dataset.py --coco data/raw/train/_annotations.coco.json \
-                             --images data/raw/train --out data/rec
 python ml/synth_nota.py                 # rendered pages, layout-held-out split
 python ml/composite_real.py --raw data/raw/train --out data/composited \
                             --fonts ml/fonts --catalogue ml/sku_catalogue.csv
-python ml/eval_layout_generalization.py # the 40.5% -> 95.5% table
+python ml/eval_layout_generalization.py # the 37.0% -> 96.0% table
 ```
+
+`SNAPTOK_FONT_DIR` points the generator at a directory of additional handwriting
+faces; without it the synthetic pages inherit the corpus's two or three writers.
 
 Training used PP-OCRv5 mobile at PaddleOCR `v3.7.0`, batch 64, Adam with cosine
 annealing from 1e-4, 40 epochs. Both runs plateaued well before 40 — arm A best
