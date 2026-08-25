@@ -11,7 +11,7 @@ The response shape is fixed - the backend depends on it.
 
 from __future__ import annotations
 
-from layout import (assign_roles, build_grid, is_number, to_int)
+from layout import (assign_roles, build_grid, is_number, split_count, to_int)
 
 MIN_CONFIDENCE = 0.70     # below this, ask a human to confirm the row
 
@@ -58,6 +58,16 @@ def assemble(boxes, width: int, height: int) -> dict:
         jumlah = to_int(value(r, "jumlah") or "")
         qty = to_int(value(r, "qty") or "")
 
+        # A row with no quantity, whose name starts with one, is a row where the
+        # detector welded the two cells together. layout.py only splits a column
+        # when it is that column's rule; this catches the single stray row, and
+        # it can only ever fill a hole -- a row that already has a quantity is
+        # left alone.
+        if qty is None:
+            welded = split_count(nama)
+            if welded:
+                qty, nama = welded
+
         # A line item needs a word for a name and a price. Printed headers fail
         # this (their "harga" cell reads the word "harga", not a number).
         if not nama or is_number(nama) or harga is None:
@@ -74,8 +84,10 @@ def assemble(boxes, width: int, height: int) -> dict:
         last_item_row = r
 
     # Grand total: a jumlah value below the last item, with no item beside it.
+    # With no items there is no "below", and the scan would start at the top of
+    # the page and read the nota number as the total. Unknown beats invented.
     stated = None
-    for r in range(last_item_row + 1, len(rows)):
+    for r in range(last_item_row + 1, len(rows)) if items else ():
         candidate = to_int(value(r, "jumlah") or "")
         nama = (value(r, "nama") or "").strip()
         if candidate is not None and (not nama or is_number(nama)):
