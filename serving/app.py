@@ -27,8 +27,13 @@ MOCK = os.environ.get("MOCK", "0") == "1"
 MODEL_DIR = os.environ.get("MODEL_DIR", "models/rec")
 REC_MODEL = os.environ.get("REC_MODEL_NAME", "PP-OCRv5_mobile_rec")
 DET_MODEL = os.environ.get("DET_MODEL_NAME", "PP-OCRv5_mobile_det")
+# The detector shrinks the long side to this before looking. Raising it opens
+# up the gaps between handwritten cells on big phone photos and stops the
+# detector welding neighbours into one line -- but measured across 40 receipts
+# it costs more than it wins (89.3% of rows reconcile at 960, 84.8% at 1600),
+# so the default stands and this is here to be tuned per corpus.
+DET_SIDE_LEN = int(os.environ.get("DET_SIDE_LEN", 960))
 MAX_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 12 * 1024 * 1024))
-PADDING = 0.05          # must match the padding used to build training crops
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_response.json"
 models: dict = {}
@@ -41,7 +46,8 @@ async def lifespan(app: FastAPI):
         print("MOCK=1 - serving fixtures, no model loaded")
     else:
         from paddleocr import TextDetection, TextRecognition
-        models["det"] = TextDetection(model_name=DET_MODEL)
+        models["det"] = TextDetection(model_name=DET_MODEL,
+                                      limit_side_len=DET_SIDE_LEN)
         # model_name is required: TextRecognition validates the directory's
         # config against its default (PP-OCRv6) and would reject our v5 export.
         models["rec"] = TextRecognition(model_name=REC_MODEL, model_dir=MODEL_DIR)
@@ -56,19 +62,6 @@ app = FastAPI(title="SNAPTOCK OCR", version="1.0.0", lifespan=lifespan)
 @app.get("/health")
 def health():
     return {"status": "ok", "mock": MOCK, "models_loaded": sorted(models)}
-
-
-def crop(page: np.ndarray, poly) -> tuple[np.ndarray, dict]:
-    """Bounding rect of a detected polygon, padded like the training crops."""
-    xs = [float(p[0]) for p in poly]
-    ys = [float(p[1]) for p in poly]
-    x, y = min(xs), min(ys)
-    w, h = max(xs) - x, max(ys) - y
-    x0 = max(0, int(x - w * PADDING))
-    y0 = max(0, int(y - h * PADDING))
-    x1 = min(page.shape[1], int(x + w * (1 + PADDING)))
-    y1 = min(page.shape[0], int(y + h * (1 + PADDING)))
-    return page[y0:y1, x0:x1], {"x": x, "y": y, "w": w, "h": h}
 
 
 @app.post("/ocr/nota")
@@ -94,15 +87,29 @@ async def ocr_nota(image: UploadFile = File(...)):
 
     # PaddleOCR accepts numpy arrays or paths only - it silently ignores PIL
     # images and returns nothing, so everything below stays numpy.
-    detected = models["det"].predict(page)
-    polys = detected[0]["dt_polys"] if detected else []
+    # cv2 arrives with paddle, and MOCK=1 has already returned above.
+    from geometry import bounds, deskew, rectify, upright
+
+    def detect(img):
+        found = models["det"].predict(img)
+        return list(found[0]["dt_polys"]) if found else []
+
+    def recognize(patches):
+        return list(models["rec"].predict(patches))
+
+    polys = detect(page)
+    # Level the page and turn it the right way up before reading it: the
+    # recognizer only reads horizontal text, and a photo of a nota is often
+    # neither level nor upright.
+    page, polys, _ = deskew(page, polys, detect)
+    page, polys = upright(page, polys, recognize)
 
     crops, geometry = [], []
     for poly in polys:
-        patch, box = crop(page, poly)
-        if patch.shape[0] >= 4 and patch.shape[1] >= 4:
+        patch = rectify(page, poly)
+        if patch is not None:
             crops.append(patch)
-            geometry.append(box)
+            geometry.append(bounds(poly))
 
     if not crops:
         raise HTTPException(422, detail={"error": "no_text_detected"})
@@ -111,7 +118,7 @@ async def ocr_nota(image: UploadFile = File(...)):
         {**box,
          "text": (pred.get("rec_text") or "").strip(),
          "conf": float(pred.get("rec_score") or 0.0)}
-        for box, pred in zip(geometry, models["rec"].predict(crops))
+        for box, pred in zip(geometry, recognize(crops))
     ]
 
     height, width = page.shape[:2]
